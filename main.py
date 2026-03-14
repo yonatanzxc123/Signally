@@ -8,6 +8,7 @@ without a web framework yet. Later, the same services can be reused in FastAPI.
 from __future__ import annotations
 
 import argparse
+import logging
 from typing import Iterable
 
 from signally.admin.admin_manager import AdminManager
@@ -25,8 +26,8 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser = subparsers.add_parser("scan", help="Scan the local network")
     scan_parser.add_argument(
         "--target",
-        default="192.168.1.0/24",
-        help="CIDR to scan, e.g. 192.168.1.0/24",
+        default=None,
+        help="CIDR to scan, e.g. 192.168.1.0/24 (auto-detected if omitted)",
     )
     scan_parser.add_argument(
         "--timeout",
@@ -66,6 +67,11 @@ def print_events(events: Iterable) -> None:
 
 
 def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
     initialize_database()
     parser = build_parser()
     args = parser.parse_args()
@@ -78,9 +84,14 @@ def main() -> None:
 
         if args.command == "scan":
             discovered_devices = scanner.scan(args.target, timeout=args.timeout)
+            print(f"\n{'='*50}")
+            print(f"  Found {len(discovered_devices)} device(s) on the network")
+            print(f"{'='*50}")
+            for d in discovered_devices:
+                print(f"  MAC: {d.mac_address}  |  IP: {d.ip_address}")
+            print(f"{'='*50}\n")
             processed = device_service.process_scan_results(discovered_devices)
-            print(f"Processed {len(processed)} discovered device(s).")
-            print_devices(processed)
+            print(f"Saved {len(processed)} device(s) to the database.")
 
         elif args.command == "approve":
             device = admin_manager.approve_device(args.mac)
