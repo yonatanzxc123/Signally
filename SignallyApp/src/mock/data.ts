@@ -1,0 +1,141 @@
+// Mock data — swap every usage site with real API calls once backend endpoints are ready.
+// TODO: remove this file entirely once all screens fetch from the backend
+
+export type DeviceStatus = 'approved' | 'unknown' | 'blocked';
+
+export type EventType =
+  | 'unknown_detected'
+  | 'device_approved'
+  | 'device_blocked'
+  | 'scan_complete'
+  | 'system';
+
+export interface Device {
+  id: string;
+  mac: string;
+  name: string;
+  ip: string;
+  status: DeviceStatus;
+  lastSeen: string;
+  vendor: string;
+}
+
+export interface NetworkEvent {
+  id: string;
+  type: EventType;
+  message: string;
+  detail: string;
+  timestamp: Date;
+}
+
+export const MOCK_DEVICES: Device[] = [
+  {
+    id: '1',
+    mac: 'A4:C3:F0:1B:2E:45',
+    name: "Idan's iPhone",
+    ip: '192.168.1.101',
+    status: 'approved',
+    lastSeen: '2 min ago',
+    vendor: 'Apple',
+  },
+  {
+    id: '2',
+    mac: 'B8:27:EB:44:F1:2C',
+    name: "Yonatan's MacBook",
+    ip: '192.168.1.102',
+    status: 'approved',
+    lastSeen: '5 min ago',
+    vendor: 'Apple',
+  },
+  {
+    id: '3',
+    mac: 'DC:A6:32:9F:3B:11',
+    name: 'Unknown Device',
+    ip: '192.168.1.118',
+    status: 'unknown',
+    lastSeen: 'Just now',
+    vendor: 'Unknown',
+  },
+  {
+    id: '4',
+    mac: '00:1A:2B:3C:4D:5E',
+    name: 'Smart TV',
+    ip: '192.168.1.105',
+    status: 'approved',
+    lastSeen: '1 hour ago',
+    vendor: 'Samsung',
+  },
+  {
+    id: '5',
+    mac: 'F0:18:98:AA:BB:CC',
+    name: 'Unknown Device',
+    ip: '192.168.1.133',
+    status: 'blocked',
+    lastSeen: '3 hours ago',
+    vendor: 'Unknown',
+  },
+];
+
+export const MOCK_EVENTS: NetworkEvent[] = [
+  {
+    id: '1',
+    type: 'unknown_detected',
+    message: 'Unknown device detected on network',
+    detail: 'DC:A6:32:9F:3B:11 — 192.168.1.118',
+    timestamp: new Date(Date.now() - 2 * 60 * 1000),
+  },
+  {
+    id: '2',
+    type: 'device_approved',
+    message: 'Authorized user identified',
+    detail: "Idan's iPhone",
+    timestamp: new Date(Date.now() - 18 * 60 * 1000),
+  },
+  {
+    id: '3',
+    type: 'scan_complete',
+    message: 'Network scan completed',
+    detail: '5 devices found',
+    timestamp: new Date(Date.now() - 20 * 60 * 1000),
+  },
+  {
+    id: '4',
+    type: 'device_blocked',
+    message: 'Device blocked',
+    detail: 'F0:18:98:AA:BB:CC',
+    timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000),
+  },
+  {
+    id: '5',
+    type: 'device_approved',
+    message: 'Authorized user identified',
+    detail: "Yonatan's MacBook",
+    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
+  },
+  {
+    id: '6',
+    type: 'scan_complete',
+    message: 'Network scan completed',
+    detail: '4 devices found',
+    timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000),
+  },
+  {
+    id: '7',
+    type: 'system',
+    message: 'System armed',
+    detail: 'Monitoring started',
+    timestamp: new Date(Date.now() - 8 * 60 * 60 * 1000),
+  },
+];
+
+export function formatTimestamp(date: Date): string {
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return date.toLocaleDateString();
+}
