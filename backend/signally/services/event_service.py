@@ -24,3 +24,13 @@ class EventService:
     def list_recent_events(self, limit: int = 50) -> List[Event]:
         stmt = select(Event).order_by(desc(Event.created_at)).limit(limit)
         return list(self.session.scalars(stmt).all())
+
+    def delete_all_events(self) -> int:
+        events = self.list_recent_events(limit=1000000)
+        count = len(events)
+
+        for event in events:
+            self.session.delete(event)
+
+        self.session.commit()
+        return count
