@@ -3,9 +3,14 @@
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 .pytest_cache/
 *.db
 *.sqlite3
+
+
+# SQLite DB (optional - keep or remove based on what we need)
+signally.db
 
 # Node / Expo
 node_modules/
@@ -26,5 +31,12 @@ web-build/
 .idea/
 .vscode/
 
+
+# Virtual environment
+.venv/
+venv/
+
 # Misc
 *.orig.*
+
+
