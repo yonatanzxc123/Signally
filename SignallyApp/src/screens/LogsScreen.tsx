@@ -71,8 +71,19 @@ export default function LogsScreen() {
         <View style={styles.card}>
           {filtered.length === 0 ? (
             <View style={styles.empty}>
-              <Ionicons name="document-text-outline" size={40} color={colors.textMuted} />
-              <Text style={styles.emptyText}>No events found</Text>
+              <Ionicons
+                name={events.length === 0 ? 'radio-outline' : 'document-text-outline'}
+                size={48}
+                color={colors.textMuted}
+              />
+              <Text style={styles.emptyTitle}>
+                {events.length === 0 ? 'No activity yet' : 'No matching events'}
+              </Text>
+              <Text style={styles.emptyText}>
+                {events.length === 0
+                  ? 'Events will appear here once your network is being monitored.'
+                  : 'Try a different filter to see more events.'}
+              </Text>
             </View>
           ) : (
             filtered.map((event) => (
@@ -169,8 +180,15 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xl,
     gap: spacing.md,
   },
-  emptyText: {
+  emptyTitle: {
     fontSize: font.lg,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  emptyText: {
+    fontSize: font.md,
     color: colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
   },
 });

@@ -63,8 +63,19 @@ export default function DevicesScreen({ navigation }: Props) {
       >
         {filtered.length === 0 ? (
           <View style={styles.empty}>
-            <Ionicons name="phone-portrait-outline" size={40} color={colors.textMuted} />
-            <Text style={styles.emptyText}>No devices found</Text>
+            <Ionicons
+              name={devices.length === 0 ? 'radio-outline' : 'phone-portrait-outline'}
+              size={48}
+              color={colors.textMuted}
+            />
+            <Text style={styles.emptyTitle}>
+              {devices.length === 0 ? 'No devices detected' : `No ${filter} devices`}
+            </Text>
+            <Text style={styles.emptyText}>
+              {devices.length === 0
+                ? 'Run a scan from the Home tab to discover devices on your network.'
+                : `You have no devices with ${filter} status.`}
+            </Text>
           </View>
         ) : (
           filtered.map((device) => (
@@ -149,8 +160,15 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl * 2,
     gap: spacing.md,
   },
-  emptyText: {
+  emptyTitle: {
     fontSize: font.lg,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  emptyText: {
+    fontSize: font.md,
     color: colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
   },
 });
