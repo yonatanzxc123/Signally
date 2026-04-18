@@ -2,9 +2,8 @@
 Pydantic schemas for the Signally API.
 """
 
-from __future__ import annotations
-
 from datetime import datetime
+from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -20,7 +19,7 @@ class DeviceResponse(BaseModel):
 class EventResponse(BaseModel):
     id: int
     event_type: str
-    device_mac: str | None
+    device_mac: Optional[str]
     details: str
     created_at: datetime
 
@@ -42,7 +41,7 @@ class SystemStateResponse(BaseModel):
     approved_user_present: bool
     decision: str
     reason: str
-    present_devices: list[DeviceResponse]
+    present_devices: List[DeviceResponse]
 
 
 class MessageResponse(BaseModel):
