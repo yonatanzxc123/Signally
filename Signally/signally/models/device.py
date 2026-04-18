@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import enum
 
-from sqlalchemy import DateTime, Enum, String
+from sqlalchemy import DateTime, Enum, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from signally.db.base import Base
@@ -33,3 +33,5 @@ class Device(Base):
         nullable=False,
         default=DeviceStatus.PENDING,
     )
+    vendor: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    device_type: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
