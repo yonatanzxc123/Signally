@@ -9,8 +9,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DeviceItem from '../components/DeviceItem';
-import { MOCK_DEVICES, Device, DeviceStatus } from '../mock/data';
+import { DeviceStatus } from '../mock/data';
 import { colors, spacing, radius, font } from '../theme';
+import { useDevices } from '../context/DevicesContext';
 
 type Filter = 'all' | DeviceStatus;
 
@@ -22,25 +23,10 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 export default function DevicesScreen() {
-  // TODO: replace with GET /devices — poll or subscribe via websocket so new devices appear live
-  const [devices, setDevices] = useState<Device[]>(MOCK_DEVICES);
+  const { devices, approveDevice, blockDevice } = useDevices();
   const [filter, setFilter] = useState<Filter>('all');
 
   const filtered = filter === 'all' ? devices : devices.filter((d) => d.status === filter);
-
-  function handleApprove(id: string) {
-    // TODO: replace with PATCH /devices/:id { status: 'approved' }
-    setDevices((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: 'approved' as DeviceStatus } : d))
-    );
-  }
-
-  function handleBlock(id: string) {
-    // TODO: replace with PATCH /devices/:id { status: 'blocked' } — backend should also enforce network block
-    setDevices((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: 'blocked' as DeviceStatus } : d))
-    );
-  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -69,6 +55,7 @@ export default function DevicesScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        bounces={false}
       >
         {filtered.length === 0 ? (
           <View style={styles.empty}>
@@ -80,8 +67,8 @@ export default function DevicesScreen() {
             <DeviceItem
               key={device.id}
               device={device}
-              onApprove={handleApprove}
-              onBlock={handleBlock}
+              onApprove={approveDevice}
+              onBlock={blockDevice}
             />
           ))
         )}

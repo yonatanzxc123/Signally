@@ -96,6 +96,7 @@ export default function AuthScreen({ onAuth }: Props) {
         <ScrollView
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
+          bounces={false}
         >
           <View style={styles.header}>
             <View style={styles.logoCircle}>

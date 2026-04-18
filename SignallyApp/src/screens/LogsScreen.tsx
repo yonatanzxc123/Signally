@@ -66,6 +66,7 @@ export default function LogsScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        bounces={false}
       >
         <View style={styles.card}>
           {filtered.length === 0 ? (

@@ -13,14 +13,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import StatusCard from '../components/StatusCard';
 import LogItem from '../components/LogItem';
-import { MOCK_DEVICES, MOCK_EVENTS } from '../mock/data';
+import { MOCK_EVENTS } from '../mock/data';
 import { colors, spacing, radius, font } from '../theme';
 import { useAuth } from '../context/AuthContext';
+import { useDevices } from '../context/DevicesContext';
 
 export default function HomeScreen() {
   const { logout } = useAuth();
-  // TODO: replace with GET /devices — poll or use websocket for live updates
-  const [devices] = useState(MOCK_DEVICES);
+  const { devices } = useDevices();
   // TODO: replace with GET /events
   const [events] = useState(MOCK_EVENTS);
   const [scanning, setScanning] = useState(false);
@@ -79,6 +79,7 @@ export default function HomeScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        bounces={false}
       >
         <StatusCard hasUnknown={hasUnknown} />
 
