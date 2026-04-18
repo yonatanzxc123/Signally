@@ -12,6 +12,10 @@ import DeviceItem from '../components/DeviceItem';
 import { DeviceStatus } from '../mock/data';
 import { colors, spacing, radius, font } from '../theme';
 import { useDevices } from '../context/DevicesContext';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { DevicesStackParamList } from '../navigation/DevicesStack';
+
+type Props = NativeStackScreenProps<DevicesStackParamList, 'DevicesList'>;
 
 type Filter = 'all' | DeviceStatus;
 
@@ -22,7 +26,7 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'blocked', label: 'Blocked' },
 ];
 
-export default function DevicesScreen() {
+export default function DevicesScreen({ navigation }: Props) {
   const { devices, approveDevice, blockDevice } = useDevices();
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -69,6 +73,7 @@ export default function DevicesScreen() {
               device={device}
               onApprove={approveDevice}
               onBlock={blockDevice}
+              onPress={(id) => navigation.navigate('DeviceDetail', { deviceId: id })}
             />
           ))
         )}

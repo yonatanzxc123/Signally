@@ -2,7 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/HomeScreen';
-import DevicesScreen from '../screens/DevicesScreen';
+import DevicesStack from './DevicesStack';
 import LogsScreen from '../screens/LogsScreen';
 import { colors, font } from '../theme';
 
@@ -44,7 +44,7 @@ export default function AppNavigator() {
       />
       <Tab.Screen
         name="Devices"
-        component={DevicesScreen}
+        component={DevicesStack}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="phone-portrait-outline" size={size} color={color} />
