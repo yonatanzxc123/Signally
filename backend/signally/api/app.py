@@ -18,6 +18,9 @@ from signally.api.dependencies import (
     mock_csi_provider,
     mock_wifi_provider,
     seed_demo_owner_if_missing,
+    set_wifi_mode,
+    set_csi_mode,
+    get_mode_state,
 )
 from signally.api.schemas import (
     DeviceResponse,
@@ -27,6 +30,9 @@ from signally.api.schemas import (
     SetCsiPresenceRequest,
     SimulateDeviceRequest,
     SystemStateResponse,
+    WifiModeRequest,
+    CsiModeRequest,
+    ModeStateResponse,
 )
 from signally.db.init_db import initialize_database
 from signally.models.device import DeviceStatus
@@ -255,3 +261,89 @@ def approve_owner_device():
         return MessageResponse(message="Owner device ensured in DB and marked as AUTHORIZED.")
     finally:
         session.close()
+
+
+
+
+@app.delete("/devices/{mac_address}", response_model=MessageResponse)
+def delete_device(mac_address: str):
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        try:
+            services["admin_manager"].delete_device(mac_address)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        return MessageResponse(message="Device deleted successfully.")
+    finally:
+        session.close()    
+
+
+
+@app.delete("/admin/devices", response_model=MessageResponse)
+def clear_all_devices():
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        deleted_count = services["admin_manager"].delete_all_devices()
+        return MessageResponse(
+            message="Deleted {0} device(s) from the database.".format(deleted_count)
+        )
+    finally:
+        session.close()
+
+
+@app.delete("/admin/events", response_model=MessageResponse)
+def clear_all_events():
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        deleted_count = services["admin_manager"].delete_all_events()
+        return MessageResponse(
+            message="Deleted {0} event(s) from the database.".format(deleted_count)
+        )
+    finally:
+        session.close()
+
+
+@app.delete("/admin/reset", response_model=MessageResponse)
+def reset_database_content():
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        result = services["admin_manager"].reset_database_content()
+        return MessageResponse(
+            message="Database reset complete. Deleted {0} device(s) and {1} event(s).".format(
+                result["deleted_devices"],
+                result["deleted_events"],
+            )
+        )
+    finally:
+        session.close()
+
+
+@app.get("/modes", response_model=ModeStateResponse)
+def get_modes():
+    state = get_mode_state()
+    return ModeStateResponse(
+        wifi_mode=state["wifi_mode"],
+        csi_mode=state["csi_mode"],
+    )
+
+
+@app.post("/modes/wifi", response_model=MessageResponse)
+def switch_wifi_mode(request: WifiModeRequest):
+    try:
+        set_wifi_mode(request.mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return MessageResponse(message="Wi-Fi mode set to {0}.".format(request.mode))
+
+
+@app.post("/modes/csi", response_model=MessageResponse)
+def switch_csi_mode(request: CsiModeRequest):
+    try:
+        set_csi_mode(request.mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return MessageResponse(message="CSI mode set to {0}.".format(request.mode))

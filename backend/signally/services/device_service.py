@@ -31,7 +31,7 @@ class DeviceService:
         return list(self.session.scalars(stmt).all())
 
     def process_scan_results(self, scan_results: List[DiscoveredDevice]) -> List[Device]:
-        processed_devices: List[Device] = []
+        processed_devices = []
 
         for result in scan_results:
             existing = self.get_by_mac(result.mac_address)
@@ -79,3 +79,21 @@ class DeviceService:
         self.session.commit()
         self.session.refresh(device)
         return device
+
+    def delete_device(self, mac_address: str) -> None:
+        device = self.get_by_mac(mac_address)
+        if device is None:
+            raise ValueError("Device with MAC {0} was not found".format(mac_address))
+
+        self.session.delete(device)
+        self.session.commit()
+
+    def delete_all_devices(self) -> int:
+        devices = self.list_all_devices()
+        count = len(devices)
+
+        for device in devices:
+            self.session.delete(device)
+
+        self.session.commit()
+        return count

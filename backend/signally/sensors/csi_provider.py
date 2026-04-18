@@ -13,3 +13,13 @@ class CsiDetectionProvider(ABC):
 
     def get_presence_strength(self) -> Optional[float]:
         return None
+
+
+class AlwaysOnCsiProvider(CsiDetectionProvider):
+    def is_presence_detected(self) -> bool:
+        return True
+
+
+class AlwaysOffCsiProvider(CsiDetectionProvider):
+    def is_presence_detected(self) -> bool:
+        return False

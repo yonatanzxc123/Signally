@@ -55,3 +55,16 @@ class SetCsiPresenceRequest(BaseModel):
 class SimulateDeviceRequest(BaseModel):
     ip_address: str
     mac_address: str
+
+
+class WifiModeRequest(BaseModel):
+    mode: str
+
+
+class CsiModeRequest(BaseModel):
+    mode: str
+
+
+class ModeStateResponse(BaseModel):
+    wifi_mode: str
+    csi_mode: str
