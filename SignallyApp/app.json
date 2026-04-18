@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Signally",
+    "slug": "signally-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0D0D1A"
+      }
+    }
+  }
+}
