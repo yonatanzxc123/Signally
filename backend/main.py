@@ -54,6 +54,13 @@ def build_parser() -> argparse.ArgumentParser:
     api_parser.add_argument("--host", default="127.0.0.1", help="Host to bind")
     api_parser.add_argument("--port", type=int, default=8000, help="Port to bind")
 
+    delete_parser = subparsers.add_parser("delete-device", help="Delete a device from the database")
+    delete_parser.add_argument("--mac", required=True, help="Device MAC address")
+
+    subparsers.add_parser("clear-devices", help="Delete all devices from the database")
+    subparsers.add_parser("clear-events", help="Delete all events from the database")
+    subparsers.add_parser("reset-db", help="Delete all devices and events from the database")
+
     return parser
 
 
@@ -129,6 +136,27 @@ def main() -> None:
         elif args.command == "purge":
             count = device_service.delete_all_devices()
             print(f"Purged {count} device(s) and all associated events. Run 'scan' to re-register.")
+
+        elif args.command == "delete-device":
+            admin_manager.delete_device(args.mac)
+            print("Deleted device: {0}".format(args.mac.upper()))
+
+        elif args.command == "clear-devices":
+            deleted_count = admin_manager.delete_all_devices()
+            print("Deleted {0} device(s).".format(deleted_count))
+
+        elif args.command == "clear-events":
+            deleted_count = admin_manager.delete_all_events()
+            print("Deleted {0} event(s).".format(deleted_count))
+
+        elif args.command == "reset-db":
+            result = admin_manager.reset_database_content()
+            print(
+                "Database reset complete. Deleted {0} device(s) and {1} event(s).".format(
+                    result["deleted_devices"],
+                    result["deleted_events"],
+                )
+            )
 
 
 if __name__ == "__main__":
