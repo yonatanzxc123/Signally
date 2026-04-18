@@ -13,14 +13,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import StatusCard from '../components/StatusCard';
 import LogItem from '../components/LogItem';
-import { MOCK_DEVICES, MOCK_EVENTS } from '../mock/data';
+import { MOCK_EVENTS } from '../mock/data';
 import { colors, spacing, radius, font } from '../theme';
 import { useAuth } from '../context/AuthContext';
+import { useDevices } from '../context/DevicesContext';
 
 export default function HomeScreen() {
   const { logout } = useAuth();
-  // TODO: replace with GET /devices — poll or use websocket for live updates
-  const [devices] = useState(MOCK_DEVICES);
+  const { devices } = useDevices();
   // TODO: replace with GET /events
   const [events] = useState(MOCK_EVENTS);
   const [scanning, setScanning] = useState(false);
@@ -79,8 +79,9 @@ export default function HomeScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-        <StatusCard hasUnknown={hasUnknown} />
+        <StatusCard hasUnknown={hasUnknown} deviceCount={devices.length} />
 
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
@@ -118,9 +119,16 @@ export default function HomeScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
-          {recentEvents.map((event) => (
-            <LogItem key={event.id} event={event} />
-          ))}
+          {recentEvents.length === 0 ? (
+            <View style={styles.emptyActivity}>
+              <Ionicons name="radio-outline" size={28} color={colors.textMuted} />
+              <Text style={styles.emptyActivityText}>No activity yet — events will appear here once your network is being monitored.</Text>
+            </View>
+          ) : (
+            recentEvents.map((event) => (
+              <LogItem key={event.id} event={event} />
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -258,5 +266,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textPrimary,
     marginBottom: spacing.sm,
+  },
+  emptyActivity: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+  },
+  emptyActivityText: {
+    fontSize: font.sm,
+    color: colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
   },
 });

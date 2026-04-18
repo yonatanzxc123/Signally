@@ -8,6 +8,7 @@ interface Props {
   device: Device;
   onApprove: (id: string) => void;
   onBlock: (id: string) => void;
+  onPress?: (id: string) => void;
 }
 
 type StatusConfig = {
@@ -38,11 +39,11 @@ const STATUS_CONFIG: Record<string, StatusConfig> = {
   },
 };
 
-export default function DeviceItem({ device, onApprove, onBlock }: Props) {
+export default function DeviceItem({ device, onApprove, onBlock, onPress }: Props) {
   const cfg = STATUS_CONFIG[device.status];
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity style={styles.card} onPress={() => onPress?.(device.id)} activeOpacity={onPress ? 0.7 : 1}>
       <View style={styles.row}>
         <View style={[styles.iconWrap, { backgroundColor: cfg.bg }]}>
           <Ionicons name="phone-portrait-outline" size={20} color={cfg.color} />
@@ -76,7 +77,7 @@ export default function DeviceItem({ device, onApprove, onBlock }: Props) {
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </TouchableOpacity>
   );
 }
 

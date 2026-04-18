@@ -1,8 +1,9 @@
 """
-Entry point for the Signally MVP backend.
+Entry point for Signally.
 
-This file provides a simple command-line interface so the project can be tested
-without a web framework yet. Later, the same services can be reused in FastAPI.
+This file supports:
+- CLI administration and scanning
+- running the FastAPI server for frontend integration/demo
 """
 
 from __future__ import annotations
@@ -10,6 +11,8 @@ from __future__ import annotations
 import argparse
 import logging
 from typing import Iterable
+
+import uvicorn
 
 from signally.admin.admin_manager import AdminManager
 from signally.capture.probe_sniffer import ProbeSniffer
@@ -21,7 +24,7 @@ from signally.services.event_service import EventService
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Signally MVP backend CLI")
+    parser = argparse.ArgumentParser(description="Signally backend")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     scan_parser = subparsers.add_parser("scan", help="Scan the local network")
@@ -51,6 +54,10 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("devices", help="List all devices")
     subparsers.add_parser("events", help="List recent events")
     subparsers.add_parser("purge", help="Delete all devices and events so they can be re-registered")
+
+    api_parser = subparsers.add_parser("serve-api", help="Run the FastAPI server")
+    api_parser.add_argument("--host", default="127.0.0.1", help="Host to bind")
+    api_parser.add_argument("--port", type=int, default=8000, help="Port to bind")
 
     return parser
 
@@ -82,6 +89,10 @@ def main() -> None:
     initialize_database()
     parser = build_parser()
     args = parser.parse_args()
+
+    if args.command == "serve-api":
+        uvicorn.run("signally.api.app:app", host=args.host, port=args.port, reload=False)
+        return
 
     with SessionLocal() as session:
         device_service = DeviceService(session)

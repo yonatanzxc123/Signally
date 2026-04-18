@@ -9,8 +9,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DeviceItem from '../components/DeviceItem';
-import { MOCK_DEVICES, Device, DeviceStatus } from '../mock/data';
+import { DeviceStatus } from '../mock/data';
 import { colors, spacing, radius, font } from '../theme';
+import { useDevices } from '../context/DevicesContext';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { DevicesStackParamList } from '../navigation/DevicesStack';
+
+type Props = NativeStackScreenProps<DevicesStackParamList, 'DevicesList'>;
 
 type Filter = 'all' | DeviceStatus;
 
@@ -21,26 +26,11 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'blocked', label: 'Blocked' },
 ];
 
-export default function DevicesScreen() {
-  // TODO: replace with GET /devices — poll or subscribe via websocket so new devices appear live
-  const [devices, setDevices] = useState<Device[]>(MOCK_DEVICES);
+export default function DevicesScreen({ navigation }: Props) {
+  const { devices, approveDevice, blockDevice } = useDevices();
   const [filter, setFilter] = useState<Filter>('all');
 
   const filtered = filter === 'all' ? devices : devices.filter((d) => d.status === filter);
-
-  function handleApprove(id: string) {
-    // TODO: replace with PATCH /devices/:id { status: 'approved' }
-    setDevices((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: 'approved' as DeviceStatus } : d))
-    );
-  }
-
-  function handleBlock(id: string) {
-    // TODO: replace with PATCH /devices/:id { status: 'blocked' } — backend should also enforce network block
-    setDevices((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: 'blocked' as DeviceStatus } : d))
-    );
-  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -69,19 +59,32 @@ export default function DevicesScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        bounces={false}
       >
         {filtered.length === 0 ? (
           <View style={styles.empty}>
-            <Ionicons name="phone-portrait-outline" size={40} color={colors.textMuted} />
-            <Text style={styles.emptyText}>No devices found</Text>
+            <Ionicons
+              name={devices.length === 0 ? 'radio-outline' : 'phone-portrait-outline'}
+              size={48}
+              color={colors.textMuted}
+            />
+            <Text style={styles.emptyTitle}>
+              {devices.length === 0 ? 'No devices detected' : `No ${filter} devices`}
+            </Text>
+            <Text style={styles.emptyText}>
+              {devices.length === 0
+                ? 'Run a scan from the Home tab to discover devices on your network.'
+                : `You have no devices with ${filter} status.`}
+            </Text>
           </View>
         ) : (
           filtered.map((device) => (
             <DeviceItem
               key={device.id}
               device={device}
-              onApprove={handleApprove}
-              onBlock={handleBlock}
+              onApprove={approveDevice}
+              onBlock={blockDevice}
+              onPress={(id) => navigation.navigate('DeviceDetail', { deviceId: id })}
             />
           ))
         )}
@@ -157,8 +160,15 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl * 2,
     gap: spacing.md,
   },
-  emptyText: {
+  emptyTitle: {
     fontSize: font.lg,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  emptyText: {
+    fontSize: font.md,
     color: colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
   },
 });

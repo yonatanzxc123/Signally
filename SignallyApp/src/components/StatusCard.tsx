@@ -5,31 +5,57 @@ import { colors, spacing, radius, font } from '../theme';
 
 interface Props {
   hasUnknown: boolean;
+  deviceCount: number;
 }
 
-export default function StatusCard({ hasUnknown }: Props) {
-  const secure = !hasUnknown;
+export default function StatusCard({ hasUnknown, deviceCount }: Props) {
+  const noDevices = deviceCount === 0;
+  const secure = !hasUnknown && !noDevices;
+
+  const config = noDevices
+    ? {
+        icon: 'radio-outline' as const,
+        iconColor: colors.textMuted,
+        iconBg: colors.divider,
+        cardBg: colors.surface,
+        labelColor: colors.textMuted,
+        label: 'STATUS',
+        statusText: 'OFFLINE',
+        statusColor: colors.textMuted,
+        sub: 'No devices detected — start a scan to monitor your network',
+      }
+    : secure
+    ? {
+        icon: 'shield-checkmark' as const,
+        iconColor: colors.secure,
+        iconBg: '#BBF7D0',
+        cardBg: colors.secureLight,
+        labelColor: colors.secure,
+        label: 'STATUS',
+        statusText: 'SECURE',
+        statusColor: colors.secure,
+        sub: 'All devices on network are recognized',
+      }
+    : {
+        icon: 'shield' as const,
+        iconColor: colors.alert,
+        iconBg: '#FECACA',
+        cardBg: colors.alertLight,
+        labelColor: colors.alert,
+        label: 'STATUS',
+        statusText: 'ALERT',
+        statusColor: colors.alert,
+        sub: 'Unknown device detected on your network',
+      };
 
   return (
-    <View style={[styles.card, secure ? styles.cardSecure : styles.cardAlert]}>
-      <View style={[styles.iconWrap, secure ? styles.iconWrapSecure : styles.iconWrapAlert]}>
-        <Ionicons
-          name={secure ? 'shield-checkmark' : 'shield'}
-          size={48}
-          color={secure ? colors.secure : colors.alert}
-        />
+    <View style={[styles.card, { backgroundColor: config.cardBg }]}>
+      <View style={[styles.iconWrap, { backgroundColor: config.iconBg }]}>
+        <Ionicons name={config.icon} size={48} color={config.iconColor} />
       </View>
-      <Text style={[styles.label, secure ? styles.labelSecure : styles.labelAlert]}>
-        STATUS
-      </Text>
-      <Text style={[styles.status, secure ? styles.statusSecure : styles.statusAlert]}>
-        {secure ? 'SECURE' : 'ALERT'}
-      </Text>
-      <Text style={styles.sub}>
-        {secure
-          ? 'All devices on network are recognized'
-          : 'Unknown device detected on your network'}
-      </Text>
+      <Text style={[styles.label, { color: config.labelColor }]}>{config.label}</Text>
+      <Text style={[styles.status, { color: config.statusColor }]}>{config.statusText}</Text>
+      <Text style={styles.sub}>{config.sub}</Text>
     </View>
   );
 }
@@ -41,8 +67,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.md,
   },
-  cardSecure: { backgroundColor: colors.secureLight },
-  cardAlert: { backgroundColor: colors.alertLight },
   iconWrap: {
     width: 88,
     height: 88,
@@ -51,24 +75,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
-  iconWrapSecure: { backgroundColor: '#BBF7D0' },
-  iconWrapAlert: { backgroundColor: '#FECACA' },
   label: {
     fontSize: font.sm,
     fontWeight: '600',
     letterSpacing: 2,
     marginBottom: spacing.xs,
   },
-  labelSecure: { color: colors.secure },
-  labelAlert: { color: colors.alert },
   status: {
     fontSize: font.xxxl,
     fontWeight: '800',
     letterSpacing: 3,
     marginBottom: spacing.sm,
   },
-  statusSecure: { color: colors.secure },
-  statusAlert: { color: colors.alert },
   sub: {
     fontSize: font.md,
     color: colors.textSecondary,
