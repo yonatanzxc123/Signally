@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import logging
+from typing import Optional, Tuple
 
 from mac_vendor_lookup import MacLookup, VendorNotFoundError
 
 logger = logging.getLogger(__name__)
 
-# Keywords matched (case-insensitive) against the OUI vendor string to classify as PHONE.
 _PHONE_VENDOR_KEYWORDS = [
     "apple",
     "samsung",
@@ -35,7 +35,7 @@ class VendorLookup:
     def __init__(self) -> None:
         self._mac = MacLookup()
 
-    def get_vendor(self, mac: str) -> str | None:
+    def get_vendor(self, mac: str) -> Optional[str]:
         try:
             return self._mac.lookup(mac)
         except VendorNotFoundError:
@@ -44,7 +44,7 @@ class VendorLookup:
             logger.warning("Vendor lookup failed for MAC %s", mac)
             return None
 
-    def get_device_type(self, vendor: str | None) -> str:
+    def get_device_type(self, vendor: Optional[str]) -> str:
         if vendor is None:
             return "UNKNOWN"
         vendor_lower = vendor.lower()
@@ -52,8 +52,7 @@ class VendorLookup:
             return "PHONE"
         return "UNKNOWN"
 
-    def enrich(self, mac: str) -> tuple[str | None, str]:
-        """Return (vendor, device_type) for a given MAC address."""
+    def enrich(self, mac: str) -> Tuple[Optional[str], str]:
         vendor = self.get_vendor(mac)
         device_type = self.get_device_type(vendor)
         return vendor, device_type
