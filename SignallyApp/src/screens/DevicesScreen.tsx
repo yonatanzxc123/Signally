@@ -22,18 +22,21 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 export default function DevicesScreen() {
+  // TODO: replace with GET /devices — poll or subscribe via websocket so new devices appear live
   const [devices, setDevices] = useState<Device[]>(MOCK_DEVICES);
   const [filter, setFilter] = useState<Filter>('all');
 
   const filtered = filter === 'all' ? devices : devices.filter((d) => d.status === filter);
 
   function handleApprove(id: string) {
+    // TODO: replace with PATCH /devices/:id { status: 'approved' }
     setDevices((prev) =>
       prev.map((d) => (d.id === id ? { ...d, status: 'approved' as DeviceStatus } : d))
     );
   }
 
   function handleBlock(id: string) {
+    // TODO: replace with PATCH /devices/:id { status: 'blocked' } — backend should also enforce network block
     setDevices((prev) =>
       prev.map((d) => (d.id === id ? { ...d, status: 'blocked' as DeviceStatus } : d))
     );

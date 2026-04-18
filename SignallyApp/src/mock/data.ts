@@ -1,4 +1,5 @@
-// Swap these for real API calls once the backend endpoints are ready
+// Mock data — swap every usage site with real API calls once backend endpoints are ready.
+// TODO: remove this file entirely once all screens fetch from the backend
 
 export type DeviceStatus = 'approved' | 'unknown' | 'blocked';
 

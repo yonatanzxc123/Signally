@@ -49,6 +49,7 @@ export default function AuthScreen({ onAuth }: Props) {
       return;
     }
     setError('');
+    // TODO: replace with POST /auth/login or POST /auth/signup — store returned JWT token in SecureStore
     onAuth();
   }
 

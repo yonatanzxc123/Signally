@@ -19,16 +19,20 @@ import { useAuth } from '../context/AuthContext';
 
 export default function HomeScreen() {
   const { logout } = useAuth();
+  // TODO: replace with GET /devices — poll or use websocket for live updates
   const [devices] = useState(MOCK_DEVICES);
+  // TODO: replace with GET /events
   const [events] = useState(MOCK_EVENTS);
   const [scanning, setScanning] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
 
+  // TODO: derive from backend — true if any approved device is currently online (affects unknown=intruder logic)
   const hasUnknown = devices.some((d) => d.status === 'unknown');
   const recentEvents = events.slice(0, 5);
 
   function handleScan() {
     setScanning(true);
+    // TODO: replace with POST /scan — await response then refresh devices list
     setTimeout(() => setScanning(false), 2000);
   }
 

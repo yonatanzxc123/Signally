@@ -23,6 +23,7 @@ const FILTERS: { key: Filter; label: string; icon: keyof typeof Ionicons.glyphMa
 ];
 
 export default function LogsScreen() {
+  // TODO: replace with GET /events — paginate with infinite scroll, newest first
   const [events] = useState<NetworkEvent[]>(MOCK_EVENTS);
   const [filter, setFilter] = useState<Filter>('all');
 

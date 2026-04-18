@@ -9,12 +9,14 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  // TODO: on mount, read JWT from SecureStore — if valid, setIsLoggedIn(true) to persist session
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   return (
     <AuthContext.Provider
       value={{
         isLoggedIn,
+        // TODO: store JWT in SecureStore on login, clear it on logout
         login: () => setIsLoggedIn(true),
         logout: () => setIsLoggedIn(false),
       }}
