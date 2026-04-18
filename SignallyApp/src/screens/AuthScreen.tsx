@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,14 +26,40 @@ export default function AuthScreen({ onAuth }: Props) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [toggleWidth, setToggleWidth] = useState(0);
+
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const formOpacity = useRef(new Animated.Value(1)).current;
+  const formTranslate = useRef(new Animated.Value(0)).current;
 
   function switchMode(next: 'login' | 'signup') {
-    setError('');
-    setName('');
-    setEmail('');
-    setPassword('');
-    setConfirmPassword('');
-    setMode(next);
+    if (next === mode) return;
+    const toSignup = next === 'signup';
+
+    Animated.spring(slideAnim, {
+      toValue: toSignup ? 1 : 0,
+      useNativeDriver: false,
+      tension: 300,
+      friction: 30,
+    }).start();
+
+    const exitX = toSignup ? -16 : 16;
+    Animated.parallel([
+      Animated.timing(formOpacity, { toValue: 0, duration: 120, useNativeDriver: true }),
+      Animated.timing(formTranslate, { toValue: exitX, duration: 120, useNativeDriver: true }),
+    ]).start(() => {
+      setError('');
+      setName('');
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
+      setMode(next);
+      formTranslate.setValue(-exitX);
+      Animated.parallel([
+        Animated.timing(formOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.timing(formTranslate, { toValue: 0, duration: 180, useNativeDriver: true }),
+      ]).start();
+    });
   }
 
   function handleSubmit() {
@@ -55,6 +82,11 @@ export default function AuthScreen({ onAuth }: Props) {
 
   const isLogin = mode === 'login';
 
+  const indicatorTranslate = slideAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, toggleWidth / 2],
+  });
+
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
@@ -74,96 +106,103 @@ export default function AuthScreen({ onAuth }: Props) {
           </View>
 
           <View style={styles.card}>
-            <View style={styles.toggle}>
-              <TouchableOpacity
-                style={[styles.toggleBtn, isLogin && styles.toggleBtnActive]}
-                onPress={() => switchMode('login')}
-              >
+            <View
+              style={styles.toggle}
+              onLayout={(e) => setToggleWidth(e.nativeEvent.layout.width)}
+            >
+              <Animated.View
+                style={[
+                  styles.toggleIndicator,
+                  { width: toggleWidth / 2, transform: [{ translateX: indicatorTranslate }] },
+                ]}
+              />
+              <TouchableOpacity style={styles.toggleBtn} onPress={() => switchMode('login')}>
                 <Text style={[styles.toggleText, isLogin && styles.toggleTextActive]}>
                   Log In
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.toggleBtn, !isLogin && styles.toggleBtnActive]}
-                onPress={() => switchMode('signup')}
-              >
+              <TouchableOpacity style={styles.toggleBtn} onPress={() => switchMode('signup')}>
                 <Text style={[styles.toggleText, !isLogin && styles.toggleTextActive]}>
                   Sign Up
                 </Text>
               </TouchableOpacity>
             </View>
 
-            {!isLogin && (
-              <>
-                <Text style={styles.label}>Name</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Your name"
-                  placeholderTextColor={colors.textMuted}
-                  value={name}
-                  onChangeText={setName}
-                />
-              </>
-            )}
+            <Animated.View
+              style={{ opacity: formOpacity, transform: [{ translateX: formTranslate }] }}
+            >
+              {!isLogin && (
+                <>
+                  <Text style={styles.label}>Name</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Your name"
+                    placeholderTextColor={colors.textMuted}
+                    value={name}
+                    onChangeText={setName}
+                  />
+                </>
+              )}
 
-            <Text style={[styles.label, !isLogin && { marginTop: spacing.md }]}>Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="you@example.com"
-              placeholderTextColor={colors.textMuted}
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-
-            <Text style={[styles.label, { marginTop: spacing.md }]}>Password</Text>
-            <View style={styles.passwordRow}>
+              <Text style={[styles.label, !isLogin && { marginTop: spacing.md }]}>Email</Text>
               <TextInput
-                style={[styles.input, styles.passwordInput]}
-                placeholder="••••••••"
+                style={styles.input}
+                placeholder="you@example.com"
                 placeholderTextColor={colors.textMuted}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
               />
-              <TouchableOpacity
-                style={styles.eyeBtn}
-                onPress={() => setShowPassword((v) => !v)}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color={colors.textSecondary}
-                />
-              </TouchableOpacity>
-            </View>
 
-            {!isLogin && (
-              <>
-                <Text style={[styles.label, { marginTop: spacing.md }]}>Confirm Password</Text>
+              <Text style={[styles.label, { marginTop: spacing.md }]}>Password</Text>
+              <View style={styles.passwordRow}>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, styles.passwordInput]}
                   placeholder="••••••••"
                   placeholderTextColor={colors.textMuted}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
+                  value={password}
+                  onChangeText={setPassword}
                   secureTextEntry={!showPassword}
                 />
-              </>
-            )}
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setShowPassword((v) => !v)}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+              {!isLogin && (
+                <>
+                  <Text style={[styles.label, { marginTop: spacing.md }]}>Confirm Password</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="••••••••"
+                    placeholderTextColor={colors.textMuted}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry={!showPassword}
+                  />
+                </>
+              )}
 
-            <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-              <Text style={styles.submitBtnText}>{isLogin ? 'Log In' : 'Create Account'}</Text>
-            </TouchableOpacity>
+              {error ? <Text style={styles.error}>{error}</Text> : null}
 
-            {isLogin && (
-              <TouchableOpacity>
-                <Text style={styles.forgotText}>Forgot password?</Text>
+              <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
+                <Text style={styles.submitBtnText}>{isLogin ? 'Log In' : 'Create Account'}</Text>
               </TouchableOpacity>
-            )}
+
+              {isLogin && (
+                <TouchableOpacity>
+                  <Text style={styles.forgotText}>Forgot password?</Text>
+                </TouchableOpacity>
+              )}
+            </Animated.View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -215,20 +254,27 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     padding: 4,
     marginBottom: spacing.lg,
+    position: 'relative',
   },
-  toggleBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
+  toggleIndicator: {
+    position: 'absolute',
+    top: 4,
+    bottom: 4,
+    left: 4,
     borderRadius: radius.sm - 2,
-  },
-  toggleBtnActive: {
     backgroundColor: colors.surface,
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
     elevation: 2,
+  },
+  toggleBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: radius.sm - 2,
+    zIndex: 1,
   },
   toggleText: {
     fontSize: font.md,
