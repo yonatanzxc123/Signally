@@ -14,18 +14,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import StatusCard from '../components/StatusCard';
 import LogItem from '../components/LogItem';
-import { MOCK_EVENTS } from '../mock/data';
 import { colors, spacing, radius, font } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { useDevices } from '../context/DevicesContext';
+import { useEvents } from '../context/EventsContext';
 import { api } from '../api/client';
 
 export default function HomeScreen() {
   const { logout } = useAuth();
   const { devices } = useDevices();
+  const { events } = useEvents();
   const queryClient = useQueryClient();
-  // TODO: replace with GET /events
-  const [events] = useState(MOCK_EVENTS);
   const [menuVisible, setMenuVisible] = useState(false);
 
   const scanMutation = useMutation({
@@ -126,8 +125,8 @@ export default function HomeScreen() {
               <Text style={styles.emptyActivityText}>No activity yet — events will appear here once your network is being monitored.</Text>
             </View>
           ) : (
-            recentEvents.map((event) => (
-              <LogItem key={event.id} event={event} />
+            recentEvents.map((event, i) => (
+              <LogItem key={event.id ?? i} event={event} />
             ))
           )}
         </View>

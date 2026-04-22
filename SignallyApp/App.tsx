@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { DevicesProvider } from './src/context/DevicesContext';
+import { EventsProvider } from './src/context/EventsContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import AuthScreen from './src/screens/AuthScreen';
 
@@ -33,7 +34,9 @@ export default function App() {
       <SafeAreaProvider>
         <AuthProvider>
           <DevicesProvider>
-            <Root />
+            <EventsProvider>
+              <Root />
+            </EventsProvider>
           </DevicesProvider>
         </AuthProvider>
       </SafeAreaProvider>
