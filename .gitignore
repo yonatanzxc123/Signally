@@ -18,6 +18,8 @@ node_modules/
 dist/
 build/
 web-build/
+SignallyApp/android/
+SignallyApp/ios/
 
 # Keys & secrets
 .env
