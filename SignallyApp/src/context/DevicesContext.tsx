@@ -45,18 +45,24 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
+  function patchDeviceInCache(updated: ApiDevice) {
+    queryClient.setQueryData<ApiDevice[]>(['devices'], (old) =>
+      old?.map((d) => d.mac_address === updated.mac_address ? { ...d, status: updated.status } : d) ?? []
+    );
+  }
+
   const approveMutation = useMutation({
     mutationFn: (mac: string) => api.approveDevice(mac),
     onMutate: (mac) => optimisticallyUpdateStatus(mac, 'AUTHORIZED'),
+    onSuccess: (updated) => patchDeviceInCache(updated),
     onError: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
   });
 
   const blockMutation = useMutation({
     mutationFn: (mac: string) => api.blockDevice(mac),
     onMutate: (mac) => optimisticallyUpdateStatus(mac, 'BLOCKED'),
+    onSuccess: (updated) => patchDeviceInCache(updated),
     onError: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
   });
 
   const devices = (data ?? []).map(mapDevice);
