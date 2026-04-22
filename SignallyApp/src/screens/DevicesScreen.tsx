@@ -9,7 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DeviceItem from '../components/DeviceItem';
-import { DeviceStatus } from '../mock/data';
+import { DeviceStatus } from '../types';
 import { colors, spacing, radius, font } from '../theme';
 import { useDevices } from '../context/DevicesContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';

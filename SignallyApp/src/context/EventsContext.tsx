@@ -1,7 +1,7 @@
 import React, { createContext, useContext } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, ApiEvent } from '../api/client';
-import { NetworkEvent, EventType } from '../mock/data';
+import { NetworkEvent, EventType } from '../types';
 
 interface EventsContextValue {
   events: NetworkEvent[];

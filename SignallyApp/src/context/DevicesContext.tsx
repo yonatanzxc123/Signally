@@ -1,7 +1,7 @@
 import React, { createContext, useContext } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiDevice } from '../api/client';
-import { Device, DeviceStatus, formatTimestamp } from '../mock/data';
+import { Device, DeviceStatus, formatTimestamp } from '../types';
 
 interface DevicesContextValue {
   devices: Device[];
