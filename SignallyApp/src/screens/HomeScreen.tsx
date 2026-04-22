@@ -27,9 +27,13 @@ export default function HomeScreen() {
   const queryClient = useQueryClient();
   const [menuVisible, setMenuVisible] = useState(false);
 
+  // TEMPORARY: replace api.scanNetwork with api.runMonitoringCycle once Raspberry Pi is integrated.
   const scanMutation = useMutation({
-    mutationFn: api.runMonitoringCycle,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
+    mutationFn: api.scanNetwork,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+    },
   });
 
   const hasUnknown = devices.some((d) => d.status === 'unknown');

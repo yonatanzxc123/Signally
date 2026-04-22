@@ -37,6 +37,7 @@ from signally.api.schemas import (
 from signally.db.init_db import initialize_database
 from signally.models.device import DeviceStatus
 from signally.network_scanner.dto import DiscoveredDevice
+from signally.network_scanner.scanner import NetworkScanner
 
 
 app = FastAPI(title="Signally API", version="1.0.0")
@@ -71,6 +72,21 @@ def on_startup() -> None:
 @app.get("/health", response_model=MessageResponse)
 def health() -> MessageResponse:
     return MessageResponse(message="Signally API is running.")
+
+
+# TEMPORARY: direct ARP scan endpoint used until Raspberry Pi handles scanning.
+# Remove this endpoint and wire scan button to POST /monitoring/run-cycle once Pi is integrated.
+@app.post("/scan", response_model=list[DeviceResponse])
+def scan_network():
+    session = get_db_session()
+    try:
+        scanner = NetworkScanner()
+        discovered = scanner.scan()
+        services = build_services(session)
+        processed = services["device_service"].process_scan_results(discovered)
+        return [to_device_response(d) for d in processed]
+    finally:
+        session.close()
 
 
 @app.get("/devices", response_model=list[DeviceResponse])

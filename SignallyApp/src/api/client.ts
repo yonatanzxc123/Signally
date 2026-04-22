@@ -71,6 +71,9 @@ export const api = {
   deleteDevice: (mac: string) =>
     request<ApiMessage>(`/devices/${encodeURIComponent(mac)}`, { method: 'DELETE' }),
 
+  // TEMPORARY: calls direct ARP scan endpoint. Replace with runMonitoringCycle once Raspberry Pi is integrated.
+  scanNetwork: () => request<ApiDevice[]>('/scan', { method: 'POST' }),
+
   // Events
   getEvents: (limit = 50) => request<ApiEvent[]>(`/events?limit=${limit}`),
 
