@@ -11,30 +11,31 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import StatusCard from '../components/StatusCard';
 import LogItem from '../components/LogItem';
 import { MOCK_EVENTS } from '../mock/data';
 import { colors, spacing, radius, font } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { useDevices } from '../context/DevicesContext';
+import { api } from '../api/client';
 
 export default function HomeScreen() {
   const { logout } = useAuth();
   const { devices } = useDevices();
+  const queryClient = useQueryClient();
   // TODO: replace with GET /events
   const [events] = useState(MOCK_EVENTS);
-  const [scanning, setScanning] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
 
-  // TODO: derive from backend — true if any approved device is currently online (affects unknown=intruder logic)
+  const scanMutation = useMutation({
+    mutationFn: api.runMonitoringCycle,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
+  });
+
   const hasUnknown = devices.some((d) => d.status === 'unknown');
   const recentEvents = events.slice(0, 5);
-
-  function handleScan() {
-    setScanning(true);
-    // TODO: replace with POST /scan — await response then refresh devices list
-    setTimeout(() => setScanning(false), 2000);
-  }
+  const scanning = scanMutation.isPending;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -104,7 +105,7 @@ export default function HomeScreen() {
 
         <TouchableOpacity
           style={[styles.scanBtn, scanning && styles.scanBtnActive]}
-          onPress={handleScan}
+          onPress={() => scanMutation.mutate()}
           disabled={scanning}
         >
           {scanning ? (

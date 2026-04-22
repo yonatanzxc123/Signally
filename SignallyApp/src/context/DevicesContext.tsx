@@ -1,34 +1,66 @@
-import React, { createContext, useContext, useState } from 'react';
-import { MOCK_DEVICES, Device, DeviceStatus } from '../mock/data';
+import React, { createContext, useContext } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api, ApiDevice } from '../api/client';
+import { Device, DeviceStatus, formatTimestamp } from '../mock/data';
 
 interface DevicesContextValue {
   devices: Device[];
+  isLoading: boolean;
+  error: Error | null;
   approveDevice: (id: string) => void;
   blockDevice: (id: string) => void;
 }
 
 const DevicesContext = createContext<DevicesContextValue | null>(null);
 
+function mapDevice(d: ApiDevice): Device {
+  const statusMap: Record<string, DeviceStatus> = {
+    PENDING: 'unknown',
+    AUTHORIZED: 'approved',
+    BLOCKED: 'blocked',
+  };
+  return {
+    id: d.mac_address,
+    mac: d.mac_address,
+    name: 'Unknown Device',
+    ip: d.ip_address,
+    status: statusMap[d.status] ?? 'unknown',
+    lastSeen: formatTimestamp(new Date(d.last_seen)),
+    vendor: 'Unknown',
+  };
+}
+
 export function DevicesProvider({ children }: { children: React.ReactNode }) {
-  // TODO: replace with GET /devices — poll or websocket for live updates
-  const [devices, setDevices] = useState<Device[]>(MOCK_DEVICES);
+  const queryClient = useQueryClient();
 
-  function approveDevice(id: string) {
-    // TODO: replace with PATCH /devices/:id { status: 'approved' }
-    setDevices((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: 'approved' as DeviceStatus } : d))
-    );
-  }
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['devices'],
+    queryFn: api.getDevices,
+    refetchInterval: 15_000,
+  });
 
-  function blockDevice(id: string) {
-    // TODO: replace with PATCH /devices/:id { status: 'blocked' } — backend should also enforce network block
-    setDevices((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: 'blocked' as DeviceStatus } : d))
-    );
-  }
+  const approveMutation = useMutation({
+    mutationFn: (mac: string) => api.approveDevice(mac),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
+  });
+
+  const blockMutation = useMutation({
+    mutationFn: (mac: string) => api.blockDevice(mac),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
+  });
+
+  const devices = (data ?? []).map(mapDevice);
 
   return (
-    <DevicesContext.Provider value={{ devices, approveDevice, blockDevice }}>
+    <DevicesContext.Provider
+      value={{
+        devices,
+        isLoading,
+        error: error as Error | null,
+        approveDevice: (id) => approveMutation.mutate(id),
+        blockDevice: (id) => blockMutation.mutate(id),
+      }}
+    >
       {children}
     </DevicesContext.Provider>
   );
