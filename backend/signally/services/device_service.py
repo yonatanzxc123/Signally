@@ -101,25 +101,25 @@ class DeviceService:
         return count
     
 
-def upsert_seen_device(self, mac_address: str, ip_address: str) -> Tuple[Device, bool]:
-    normalized_mac = mac_address.upper()
-    device = self.get_by_mac(normalized_mac)
+def upsert_seen_device(self, mac_address: str, ip_address: Optional[str]) -> Tuple[Device, bool]:
+        normalized_mac = mac_address.upper()
+        device = self.get_by_mac(normalized_mac)
 
-    if device is None:
-        device = Device(
-            mac_address=normalized_mac,
-            ip_address=ip_address,
-            first_seen=utc_now(),
-            last_seen=utc_now(),
-            status=DeviceStatus.PENDING,
-        )
-        self.session.add(device)
+        if device is None:
+            device = Device(
+                mac_address=normalized_mac,
+                ip_address=ip_address,
+                first_seen=utc_now(),
+                last_seen=utc_now(),
+                status=DeviceStatus.PENDING,
+            )
+            self.session.add(device)
+            self.session.commit()
+            self.session.refresh(device)
+            return device, True
+
+        device.ip_address = ip_address
+        device.last_seen = utc_now()
         self.session.commit()
         self.session.refresh(device)
-        return device, True
-
-    device.ip_address = ip_address
-    device.last_seen = utc_now()
-    self.session.commit()
-    self.session.refresh(device)
-    return device, False
+        return device, False

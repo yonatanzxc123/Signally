@@ -2,7 +2,7 @@
 Three-layer correlation service.
 """
 
-from signally.services.correlation_models import (
+from signally.models.correlation_models import (
     CorrelationContext,
     CorrelationDecision,
 )

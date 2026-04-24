@@ -28,6 +28,7 @@ from signally.api.dependencies import (
     get_db_session,
     wifi_probing_state,
 )
+from signally.models.correlation_models import CorrelationContext
 from signally.api.schemas import (
     DeviceResponse,
     EventResponse,

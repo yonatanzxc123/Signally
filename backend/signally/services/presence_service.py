@@ -18,7 +18,7 @@ from signally.config import (
     PRESENCE_WINDOW_SECONDS,
 )
 from signally.models.device import Device, DeviceStatus
-from signally.services.correlation_models import ConnectedPresenceSnapshot
+from signally.models.correlation_models import ConnectedPresenceSnapshot
 from signally.services.device_service import DeviceService
 from signally.services.event_service import EventService
 from signally.utils.time_utils import utc_now

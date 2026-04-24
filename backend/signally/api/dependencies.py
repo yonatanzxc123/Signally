@@ -2,6 +2,7 @@
 Dependency wiring for the Signally API.
 """
 
+import os
 from sqlalchemy.orm import Session
 
 from signally.admin.admin_manager import AdminManager
@@ -17,7 +18,7 @@ from signally.services.presence_service import PresenceService
 #--- CONFIGURABLE CSI TOGGLE ---
 # Set to "True" when we want to use the actual Raspberry Pi Wi-Fi adapter stream.
 # Set to "False" for we to use the mock one.
-USE_REAL_CSI = os.getenv("SIGNALLY_USE_REAL_CSI", "False").lower() == "false"
+USE_REAL_CSI = os.getenv("SIGNALLY_USE_REAL_CSI", "False").lower() == "true"
 
 if USE_REAL_CSI:
     csi_provider = RealCsiDetectionProvider(udp_ip="127.0.0.1", udp_port=5500)

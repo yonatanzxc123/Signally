@@ -12,7 +12,7 @@ from signally.config import (
     EVENT_WIFI_PROBE_DEVICE_DISCOVERED_NEW,
     EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN,
     EVENT_WIFI_PROBING_ERROR,
-    EVENT_WIFI_PROBING_RECENT_EVENT_LIMIT,
+    WIFI_PROBING_RECENT_EVENT_LIMIT,  # <-- FIXED: Removed "EVENT_" prefix
     EVENT_WIFI_PROBING_STARTED,
     EVENT_WIFI_PROBING_STOPPED,
 )
@@ -55,7 +55,7 @@ class WifiProbingService:
     def list_recent_devices(self, limit: int = 50) -> List[Device]:
         events = self.event_service.list_recent_events_by_types(
             event_types=WIFI_PROBE_DEVICE_EVENT_TYPES,
-            limit=EVENT_WIFI_PROBING_RECENT_EVENT_LIMIT,
+            limit=WIFI_PROBING_RECENT_EVENT_LIMIT,  
         )
 
         devices = []
