@@ -2,7 +2,7 @@
 Service for writing and reading events.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
@@ -23,6 +23,19 @@ class EventService:
 
     def list_recent_events(self, limit: int = 50) -> List[Event]:
         stmt = select(Event).order_by(desc(Event.created_at)).limit(limit)
+        return list(self.session.scalars(stmt).all())
+
+    def list_recent_events_by_types(
+        self,
+        event_types: Sequence[str],
+        limit: int = 500,
+    ) -> List[Event]:
+        stmt = (
+            select(Event)
+            .where(Event.event_type.in_(list(event_types)))
+            .order_by(desc(Event.created_at))
+            .limit(limit)
+        )
         return list(self.session.scalars(stmt).all())
 
     def delete_all_events(self) -> int:

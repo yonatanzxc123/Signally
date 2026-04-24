@@ -1,43 +1,81 @@
 """
 FastAPI application for Signally.
 
-This API exposes:
+Current backend focus:
 - device/admin endpoints
 - event endpoints
-- monitoring endpoints
-- demo simulation endpoints
+- ARP scan endpoint
+- Wi-Fi probing endpoints
+- simple CSI flag endpoint (to be changed)
 """
 
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import FastAPI, HTTPException
+import threading
+import time
+from signally.config import MONITOR_INTERVAL_SECONDS
+from signally.db.init_db import initialize_database
+from signally.network_scanner.scanner import NetworkScanner
+from signally.wifi_probing.wifi_probing_service import WifiProbingService
+from scapy.all import get_if_list  
+
 
 from signally.api.dependencies import (
     build_services,
+    csi_provider,
     get_db_session,
-    mock_csi_provider,
-    mock_wifi_provider,
-    seed_demo_owner_if_missing,
-    set_wifi_mode,
-    set_csi_mode,
-    get_mode_state,
+    wifi_probing_state,
 )
+from signally.models.correlation_models import CorrelationContext
 from signally.api.schemas import (
     DeviceResponse,
     EventResponse,
     MessageResponse,
-    MonitoringCycleResponse,
     SetCsiPresenceRequest,
-    SimulateDeviceRequest,
+    WifiProbingStartRequest,
+    WifiProbingStatusResponse,
     SystemStateResponse,
-    WifiModeRequest,
-    CsiModeRequest,
-    ModeStateResponse,
+    MonitoringCycleResponse
 )
-from signally.db.init_db import initialize_database
-from signally.models.device import DeviceStatus
-from signally.network_scanner.dto import DiscoveredDevice
-from signally.network_scanner.scanner import NetworkScanner
+
+
+def run_background_monitor():
+    """ Background thread: Runs ARP, gathers Probes, and evaluates Correlation. """
+    while True:
+        try:
+            session = get_db_session()
+            scanner = NetworkScanner()
+            discovered = scanner.scan()
+            
+            services = build_services(session)
+            services["device_service"].process_scan_results(discovered)
+            
+            # --- CORRELATION EVALUATION ---
+            csi_detected = csi_provider.is_presence_detected()
+            connected_presence = services["presence_service"].get_presence_snapshot()
+            nearby_devices = WifiProbingService(session).list_recent_devices(limit=50)
+            
+            context = CorrelationContext(
+                csi_presence_detected=csi_detected,
+                nearby_device_count=len(nearby_devices),
+                connected_presence=connected_presence
+            )
+            
+            decision = services["correlation_service"].evaluate(context)
+            
+            if decision.decision == "ALERT":
+                services["alert_service"].raise_unauthorized_presence_alert()
+            elif decision.decision == "HIGH_ALERT":
+                services["alert_service"].raise_blocked_device_alert()
+                
+            session.close()
+        except Exception as e:
+            print(f"Monitor Loop Error: {e}")
+        
+        time.sleep(MONITOR_INTERVAL_SECONDS)
 
 
 app = FastAPI(title="Signally API", version="1.0.0")
@@ -63,28 +101,52 @@ def to_event_response(event) -> EventResponse:
     )
 
 
+
 @app.on_event("startup")
 def on_startup() -> None:
     initialize_database()
-    seed_demo_owner_if_missing()
+    
+    # 1. Start the ARP & Correlation background loop
+    threading.Thread(target=run_background_monitor, daemon=True).start()
+    
+    # 2. Auto-Fallback for Layer 2 (Wi-Fi Probing)
+    # This is the name we expect the Wavlink to have once in monitor mode
+    EXPECTED_WIFI_INTERFACE = "wlan1mon" 
+    
+    try:
+        # VALIDATION STEP: Check if the interface is actually plugged in
+        available_interfaces = get_if_list()
+        
+        if EXPECTED_WIFI_INTERFACE not in available_interfaces:
+            raise ValueError(f"Interface {EXPECTED_WIFI_INTERFACE} is not connected.")
 
+        # ATTEMPT: Try to bind to the physical Wavlink antenna
+        wifi_probing_state.start(interface=EXPECTED_WIFI_INTERFACE, mock_mode=False)
+        print(f"[STARTUP] SUCCESS: Layer 2 Wi-Fi Probing started in REAL mode on {EXPECTED_WIFI_INTERFACE}.")
+        
+    except Exception as hardware_error:
+        # FALLBACK: Adapter missing or driver not loaded? Silently fall back to Mock!
+        print(f"[STARTUP] Hardware bypass ({hardware_error}). Layer 2 falling back to MOCK mode.")
+        wifi_probing_state.start(interface=None, mock_mode=True)
+
+        
 
 @app.get("/health", response_model=MessageResponse)
 def health() -> MessageResponse:
     return MessageResponse(message="Signally API is running.")
 
 
-# TEMPORARY: direct ARP scan endpoint used until Raspberry Pi handles scanning.
-# Remove this endpoint and wire scan button to POST /monitoring/run-cycle once Pi is integrated.
 @app.post("/scan", response_model=list[DeviceResponse])
 def scan_network():
     session = get_db_session()
     try:
         scanner = NetworkScanner()
         discovered = scanner.scan()
+
         services = build_services(session)
         processed = services["device_service"].process_scan_results(discovered)
-        return [to_device_response(d) for d in processed]
+
+        return [to_device_response(device) for device in processed]
     finally:
         session.close()
 
@@ -139,148 +201,6 @@ def block_device(mac_address: str):
         session.close()
 
 
-@app.get("/events", response_model=list[EventResponse])
-def list_events(limit: int = 50):
-    session = get_db_session()
-    try:
-        services = build_services(session)
-        events = services["event_service"].list_recent_events(limit=limit)
-        return [to_event_response(event) for event in events]
-    finally:
-        session.close()
-
-
-@app.post("/monitoring/run-cycle", response_model=MonitoringCycleResponse)
-def run_monitoring_cycle():
-    session = get_db_session()
-    try:
-        services = build_services(session)
-        result = services["monitoring_service"].run_cycle()
-
-        return MonitoringCycleResponse(
-            csi_presence_detected=result["csi_presence_detected"],
-            approved_user_present=result["approved_user_present"],
-            decision=result["decision"],
-            reason=result["reason"],
-            processed_devices_count=result["processed_devices_count"],
-            present_devices_count=result["present_devices_count"],
-            authorized_devices_count=result["authorized_devices_count"],
-            pending_devices_count=result["pending_devices_count"],
-            blocked_devices_count=result["blocked_devices_count"],
-        )
-    finally:
-        session.close()
-
-
-@app.get("/system/state", response_model=SystemStateResponse)
-def get_system_state():
-    session = get_db_session()
-    try:
-        services = build_services(session)
-        presence_snapshot = services["presence_service"].get_presence_snapshot()
-        decision = services["decision_service"].evaluate(
-            csi_presence_detected=mock_csi_provider.is_presence_detected(),
-            presence_snapshot=presence_snapshot,
-        )
-
-        return SystemStateResponse(
-            csi_presence_detected=decision.csi_presence_detected,
-            approved_user_present=decision.approved_user_present,
-            decision=decision.decision,
-            reason=decision.reason,
-            present_devices=[to_device_response(device) for device in presence_snapshot.present_devices],
-        )
-    finally:
-        session.close()
-
-
-# -------------------------
-# Demo endpoints
-# -------------------------
-
-@app.post("/demo/csi/set", response_model=MessageResponse)
-def set_csi_presence(request: SetCsiPresenceRequest):
-    mock_csi_provider.set_presence_detected(request.detected)
-    return MessageResponse(
-        message=f"CSI presence set to {request.detected}."
-    )
-
-
-@app.post("/demo/wifi/clear", response_model=MessageResponse)
-def clear_wifi_devices():
-    mock_wifi_provider.clear_visible_devices()
-    return MessageResponse(message="Mock Wi-Fi visible devices cleared.")
-
-
-@app.post("/demo/wifi/add-device", response_model=MessageResponse)
-def add_wifi_device(request: SimulateDeviceRequest):
-    mock_wifi_provider.add_visible_device(
-        ip_address=request.ip_address,
-        mac_address=request.mac_address,
-    )
-    return MessageResponse(
-        message=f"Added visible mock device {request.mac_address} at {request.ip_address}."
-    )
-
-
-@app.post("/demo/wifi/set-owner-home", response_model=MessageResponse)
-def set_owner_home():
-    mock_wifi_provider.set_visible_devices(
-        [
-            DiscoveredDevice(
-                ip_address="192.168.1.10",
-                mac_address="AA:BB:CC:DD:EE:01",
-            )
-        ]
-    )
-    return MessageResponse(message="Mock Wi-Fi state set: owner is home.")
-
-
-@app.post("/demo/wifi/set-owner-away", response_model=MessageResponse)
-def set_owner_away():
-    mock_wifi_provider.clear_visible_devices()
-    return MessageResponse(message="Mock Wi-Fi state set: owner is away.")
-
-
-@app.post("/demo/wifi/set-friend-arrival", response_model=MessageResponse)
-def set_friend_arrival():
-    mock_wifi_provider.set_visible_devices(
-        [
-            DiscoveredDevice(
-                ip_address="192.168.1.20",
-                mac_address="AA:BB:CC:DD:EE:99",
-            )
-        ]
-    )
-    return MessageResponse(message="Mock Wi-Fi state set: friend device arrived.")
-
-
-@app.post("/demo/setup/approve-owner", response_model=MessageResponse)
-def approve_owner_device():
-    session = get_db_session()
-    try:
-        services = build_services(session)
-        owner_mac = "AA:BB:CC:DD:EE:01"
-
-        owner = services["device_service"].get_by_mac(owner_mac)
-        if owner is None:
-            services["device_service"].process_scan_results(
-                [
-                    DiscoveredDevice(
-                        ip_address="192.168.1.10",
-                        mac_address=owner_mac,
-                    )
-                ]
-            )
-
-        services["device_service"].update_status(owner_mac, DeviceStatus.AUTHORIZED)
-        return MessageResponse(message="Owner device ensured in DB and marked as AUTHORIZED.")
-    finally:
-        session.close()
-
-
-
-
 @app.delete("/devices/{mac_address}", response_model=MessageResponse)
 def delete_device(mac_address: str):
     session = get_db_session()
@@ -290,10 +210,21 @@ def delete_device(mac_address: str):
             services["admin_manager"].delete_device(mac_address)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
+
         return MessageResponse(message="Device deleted successfully.")
     finally:
-        session.close()    
+        session.close()
 
+
+@app.get("/events", response_model=list[EventResponse])
+def list_events(limit: int = 50):
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        events = services["event_service"].list_recent_events(limit=limit)
+        return [to_event_response(event) for event in events]
+    finally:
+        session.close()
 
 
 @app.delete("/admin/devices", response_model=MessageResponse)
@@ -338,28 +269,150 @@ def reset_database_content():
         session.close()
 
 
-@app.get("/modes", response_model=ModeStateResponse)
-def get_modes():
-    state = get_mode_state()
-    return ModeStateResponse(
-        wifi_mode=state["wifi_mode"],
-        csi_mode=state["csi_mode"],
+@app.post("/wifi_probing/start", response_model=MessageResponse)
+def start_wifi_probing(request: WifiProbingStartRequest):
+    try:
+        wifi_probing_state.start(interface=request.interface, mock_mode=request.mock_mode)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return MessageResponse(message="Wi-Fi probing started.")
+
+
+@app.post("/wifi_probing/stop", response_model=MessageResponse)
+def stop_wifi_probing():
+    wifi_probing_state.stop()
+    return MessageResponse(message="Wi-Fi probing stopped.")
+
+
+@app.get("/wifi_probing/status", response_model=WifiProbingStatusResponse)
+def get_wifi_probing_status():
+    state = wifi_probing_state.status()
+    return WifiProbingStatusResponse(
+        running=state["running"],
+        interface=state["interface"],
+        mock_mode=state["mock_mode"],
+        started_at=state["started_at"],
+        last_error=state["last_error"],
     )
 
 
-@app.post("/modes/wifi", response_model=MessageResponse)
-def switch_wifi_mode(request: WifiModeRequest):
+@app.get("/wifi_probing/devices", response_model=list[DeviceResponse])
+def list_wifi_probing_devices(limit: int = 50):
+    session = get_db_session()
     try:
-        set_wifi_mode(request.mode)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    return MessageResponse(message="Wi-Fi mode set to {0}.".format(request.mode))
+        service = WifiProbingService(session)
+        devices = service.list_recent_devices(limit=limit)
+        return [to_device_response(device) for device in devices]
+    finally:
+        session.close()
 
 
-@app.post("/modes/csi", response_model=MessageResponse)
-def switch_csi_mode(request: CsiModeRequest):
+@app.post("/wifi_probing/mock-detection", response_model=MessageResponse)
+def add_mock_wifi_probe_detection(
+    mac_address: str,
+    ssid: Optional[str] = None,
+    rssi: Optional[int] = None,
+    frame_type: str = "probe_req",
+    channel: Optional[int] = None,
+):
     try:
-        set_csi_mode(request.mode)
-    except ValueError as exc:
+        wifi_probing_state.add_mock_detection(
+            mac_address=mac_address,
+            ssid=ssid,
+            rssi=rssi,
+            frame_type=frame_type,
+            channel=channel,
+        )
+    except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return MessageResponse(message="CSI mode set to {0}.".format(request.mode))
+
+    return MessageResponse(message="Mock Wi-Fi probing detection added.")
+
+
+@app.post("/csi/set", response_model=MessageResponse)
+def set_csi_presence(request: SetCsiPresenceRequest):
+    csi_provider.set_detected(request.detected)
+    return MessageResponse(message="CSI presence set to {0}.".format(request.detected))
+
+
+@app.get("/csi/status")
+def get_csi_status():
+    return {
+        "presence_detected": csi_provider.is_presence_detected(),
+        "presence_strength": csi_provider.get_presence_strength(),
+    }
+
+@app.get("/nearby/devices", response_model=list[DeviceResponse])
+def list_nearby_devices(limit: int = 50):
+    """ Instructor Requirement: API to get nearby unassociated devices """
+    session = get_db_session()
+    try:
+        service = WifiProbingService(session)
+        devices = service.list_recent_devices(limit=limit)
+        return [to_device_response(device) for device in devices]
+    finally:
+        session.close()
+
+@app.get("/system/state", response_model=SystemStateResponse)
+def get_system_state():
+    """ Frontend requirement: Gets the current correlated state """
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        csi_detected = csi_provider.is_presence_detected()
+        connected_presence = services["presence_service"].get_presence_snapshot()
+        nearby_devices = WifiProbingService(session).list_recent_devices(limit=50)
+        
+        context = CorrelationContext(
+            csi_presence_detected=csi_detected,
+            nearby_device_count=len(nearby_devices),
+            connected_presence=connected_presence
+        )
+        
+        decision = services["correlation_service"].evaluate(context)
+        
+        return SystemStateResponse(
+            csi_presence_detected=csi_detected,
+            approved_user_present=connected_presence.approved_user_present,
+            decision=decision.decision,
+            reason=decision.reason,
+            present_devices=[to_device_response(d) for d in connected_presence.connected_devices]
+        )
+    finally:
+        session.close()
+
+@app.post("/monitoring/run-cycle", response_model=MonitoringCycleResponse)
+def run_monitoring_cycle():
+    """ Frontend requirement: Manually trigger a full cycle """
+    session = get_db_session()
+    try:
+        scanner = NetworkScanner()
+        discovered = scanner.scan()
+        services = build_services(session)
+        services["device_service"].process_scan_results(discovered)
+        
+        csi_detected = csi_provider.is_presence_detected()
+        connected_presence = services["presence_service"].get_presence_snapshot()
+        nearby_devices = WifiProbingService(session).list_recent_devices(limit=50)
+        
+        context = CorrelationContext(
+            csi_presence_detected=csi_detected,
+            nearby_device_count=len(nearby_devices),
+            connected_presence=connected_presence
+        )
+        decision = services["correlation_service"].evaluate(context)
+        
+        return MonitoringCycleResponse(
+            csi_presence_detected=csi_detected,
+            approved_user_present=connected_presence.approved_user_present,
+            decision=decision.decision,
+            reason=decision.reason,
+            processed_devices_count=len(discovered),
+            present_devices_count=len(connected_presence.connected_devices),
+            authorized_devices_count=len(connected_presence.authorised_connected_devices),
+            pending_devices_count=len(connected_presence.pending_connected_devices),
+            blocked_devices_count=len(connected_presence.blocked_connected_devices)
+        )
+    finally:
+        session.close()
