@@ -11,30 +11,34 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import StatusCard from '../components/StatusCard';
 import LogItem from '../components/LogItem';
-import { MOCK_EVENTS } from '../mock/data';
 import { colors, spacing, radius, font } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { useDevices } from '../context/DevicesContext';
+import { useEvents } from '../context/EventsContext';
+import { api } from '../api/client';
 
 export default function HomeScreen() {
   const { logout } = useAuth();
   const { devices } = useDevices();
-  // TODO: replace with GET /events
-  const [events] = useState(MOCK_EVENTS);
-  const [scanning, setScanning] = useState(false);
+  const { events } = useEvents();
+  const queryClient = useQueryClient();
   const [menuVisible, setMenuVisible] = useState(false);
 
-  // TODO: derive from backend — true if any approved device is currently online (affects unknown=intruder logic)
+  // TEMPORARY: replace api.scanNetwork with api.runMonitoringCycle once Raspberry Pi is integrated.
+  const scanMutation = useMutation({
+    mutationFn: api.scanNetwork,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+    },
+  });
+
   const hasUnknown = devices.some((d) => d.status === 'unknown');
   const recentEvents = events.slice(0, 5);
-
-  function handleScan() {
-    setScanning(true);
-    // TODO: replace with POST /scan — await response then refresh devices list
-    setTimeout(() => setScanning(false), 2000);
-  }
+  const scanning = scanMutation.isPending;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -104,7 +108,7 @@ export default function HomeScreen() {
 
         <TouchableOpacity
           style={[styles.scanBtn, scanning && styles.scanBtnActive]}
-          onPress={handleScan}
+          onPress={() => scanMutation.mutate()}
           disabled={scanning}
         >
           {scanning ? (
@@ -125,8 +129,8 @@ export default function HomeScreen() {
               <Text style={styles.emptyActivityText}>No activity yet — events will appear here once your network is being monitored.</Text>
             </View>
           ) : (
-            recentEvents.map((event) => (
-              <LogItem key={event.id} event={event} />
+            recentEvents.map((event, i) => (
+              <LogItem key={event.id ?? i} event={event} />
             ))
           )}
         </View>

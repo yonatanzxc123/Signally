@@ -9,8 +9,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import LogItem from '../components/LogItem';
-import { MOCK_EVENTS, NetworkEvent, EventType } from '../mock/data';
+import { EventType } from '../types';
 import { colors, spacing, radius, font } from '../theme';
+import { useEvents } from '../context/EventsContext';
 
 type Filter = 'all' | EventType;
 
@@ -23,8 +24,7 @@ const FILTERS: { key: Filter; label: string; icon: keyof typeof Ionicons.glyphMa
 ];
 
 export default function LogsScreen() {
-  // TODO: replace with GET /events — paginate with infinite scroll, newest first
-  const [events] = useState<NetworkEvent[]>(MOCK_EVENTS);
+  const { events } = useEvents();
   const [filter, setFilter] = useState<Filter>('all');
 
   const filtered = filter === 'all' ? events : events.filter((e) => e.type === filter);

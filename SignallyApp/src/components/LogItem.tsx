@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, font } from '../theme';
-import { NetworkEvent, EventType, formatTimestamp } from '../mock/data';
+import { NetworkEvent, EventType, formatTimestamp } from '../types';
 
 interface Props {
   event: NetworkEvent;
