@@ -25,7 +25,7 @@ class Device(Base):
     __tablename__ = "devices"
 
     mac_address: Mapped[str] = mapped_column(String(17), primary_key=True)
-    ip_address: Mapped[str] = mapped_column(String(45), nullable=False)
+    ip_address: Mapped[str] = mapped_column(String(45), nullable=True)
     first_seen: Mapped[DateTime] = mapped_column(DateTime, nullable=False, default=utc_now)
     last_seen: Mapped[DateTime] = mapped_column(DateTime, nullable=False, default=utc_now)
     status: Mapped[DeviceStatus] = mapped_column(

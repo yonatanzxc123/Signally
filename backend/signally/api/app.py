@@ -14,6 +14,13 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+import threading
+import time
+from signally.config import MONITOR_INTERVAL_SECONDS
+from signally.db.init_db import initialize_database
+from signally.network_scanner.scanner import NetworkScanner
+from signally.wifi_probing.wifi_probing_service import WifiProbingService
+
 
 from signally.api.dependencies import (
     build_services,
@@ -29,9 +36,24 @@ from signally.api.schemas import (
     WifiProbingStartRequest,
     WifiProbingStatusResponse,
 )
-from signally.db.init_db import initialize_database
-from signally.network_scanner.scanner import NetworkScanner
-from signally.wifi_probing.wifi_probing_service import WifiProbingService
+
+
+def run_background_monitor():
+    """ Background thread to automatically run ARP scans every X seconds. """
+    while True:
+        try:
+            session = get_db_session()
+            scanner = NetworkScanner()
+            discovered = scanner.scan() # Uses default CIDR from config
+            
+            services = build_services(session)
+            services["device_service"].process_scan_results(discovered)
+            session.close()
+        except Exception as e:
+            print(f"Monitor Loop Error: {e}")
+        
+        time.sleep(MONITOR_INTERVAL_SECONDS)
+
 
 
 app = FastAPI(title="Signally API", version="1.0.0")
@@ -60,7 +82,8 @@ def to_event_response(event) -> EventResponse:
 @app.on_event("startup")
 def on_startup() -> None:
     initialize_database()
-
+    # Start the automatic scanning loop
+    threading.Thread(target=run_background_monitor, daemon=True).start()
 
 @app.get("/health", response_model=MessageResponse)
 def health() -> MessageResponse:
