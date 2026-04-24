@@ -35,3 +35,22 @@ class SetCsiPresenceRequest(BaseModel):
 class CsiPresenceResponse(BaseModel):
     detected: bool
     strength: Optional[float]
+
+
+class SystemStateResponse(BaseModel):
+    csi_presence_detected: bool
+    approved_user_present: bool
+    decision: str
+    reason: str
+    present_devices: list[DeviceResponse]
+
+class MonitoringCycleResponse(BaseModel):
+    csi_presence_detected: bool
+    approved_user_present: bool
+    decision: str
+    reason: str
+    processed_devices_count: int
+    present_devices_count: int
+    authorized_devices_count: int
+    pending_devices_count: int
+    blocked_devices_count: int

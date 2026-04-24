@@ -18,20 +18,24 @@ class CorrelationService:
         # 1. CRITICAL: Blocked device physically here
         if blocked_present:
             return CorrelationDecision(
-                decision="ALERT",
-                severity="HIGH",
-                reason="A blocked device is active while presence is detected.",
+                decision="HIGH_ALERT",
+                severity="CRITICAL",
+                reason="A blocked device is active on the network.",
                 csi_presence_detected=csi_detected,
                 nearby_device_count=context.nearby_device_count,
                 approved_user_present=approved_present
             )
 
-        # 2. ALERT: CSI motion + Probing evidence, but NO authorized phone connected
+        # 2. ALERT: CSI motion + NO authorized phone connected
         if csi_detected and not approved_present:
+            reason = "Physical presence detected via CSI, but no authorized devices are home."
+            if nearby_present:
+                reason = "Physical presence detected, and an unknown nearby device is probing."
+            
             return CorrelationDecision(
                 decision="ALERT",
                 severity="MEDIUM",
-                reason="Physical presence detected via CSI, but no authorized devices are home.",
+                reason=reason,
                 csi_presence_detected=csi_detected,
                 nearby_device_count=context.nearby_device_count,
                 approved_user_present=False
@@ -48,11 +52,11 @@ class CorrelationService:
                 approved_user_present=True
             )
 
-        # 4. IDLE: No motion, no devices
+        # 4. IDLE: No motion
         return CorrelationDecision(
             decision="IDLE",
             severity="LOW",
-            reason="No physical presence or unknown nearby devices detected.",
+            reason="System monitoring normally.",
             csi_presence_detected=False,
             nearby_device_count=context.nearby_device_count,
             approved_user_present=approved_present

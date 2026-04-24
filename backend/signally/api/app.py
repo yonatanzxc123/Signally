@@ -39,21 +39,39 @@ from signally.api.schemas import (
 
 
 def run_background_monitor():
-    """ Background thread to automatically run ARP scans every X seconds. """
+    """ Background thread: Runs ARP, gathers Probes, and evaluates Correlation. """
     while True:
         try:
             session = get_db_session()
             scanner = NetworkScanner()
-            discovered = scanner.scan() # Uses default CIDR from config
+            discovered = scanner.scan()
             
             services = build_services(session)
             services["device_service"].process_scan_results(discovered)
+            
+            # --- CORRELATION EVALUATION ---
+            csi_detected = csi_provider.is_presence_detected()
+            connected_presence = services["presence_service"].get_presence_snapshot()
+            nearby_devices = WifiProbingService(session).list_recent_devices(limit=50)
+            
+            context = CorrelationContext(
+                csi_presence_detected=csi_detected,
+                nearby_device_count=len(nearby_devices),
+                connected_presence=connected_presence
+            )
+            
+            decision = services["correlation_service"].evaluate(context)
+            
+            if decision.decision == "ALERT":
+                services["alert_service"].raise_unauthorized_presence_alert()
+            elif decision.decision == "HIGH_ALERT":
+                services["alert_service"].raise_blocked_device_alert()
+                
             session.close()
         except Exception as e:
             print(f"Monitor Loop Error: {e}")
         
         time.sleep(MONITOR_INTERVAL_SECONDS)
-
 
 
 app = FastAPI(title="Signally API", version="1.0.0")
@@ -296,3 +314,77 @@ def get_csi_status():
         "presence_detected": csi_provider.is_presence_detected(),
         "presence_strength": csi_provider.get_presence_strength(),
     }
+
+@app.get("/nearby/devices", response_model=list[DeviceResponse])
+def list_nearby_devices(limit: int = 50):
+    """ Instructor Requirement: API to get nearby unassociated devices """
+    session = get_db_session()
+    try:
+        service = WifiProbingService(session)
+        devices = service.list_recent_devices(limit=limit)
+        return [to_device_response(device) for device in devices]
+    finally:
+        session.close()
+
+@app.get("/system/state", response_model=SystemStateResponse)
+def get_system_state():
+    """ Frontend requirement: Gets the current correlated state """
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        csi_detected = csi_provider.is_presence_detected()
+        connected_presence = services["presence_service"].get_presence_snapshot()
+        nearby_devices = WifiProbingService(session).list_recent_devices(limit=50)
+        
+        context = CorrelationContext(
+            csi_presence_detected=csi_detected,
+            nearby_device_count=len(nearby_devices),
+            connected_presence=connected_presence
+        )
+        
+        decision = services["correlation_service"].evaluate(context)
+        
+        return SystemStateResponse(
+            csi_presence_detected=csi_detected,
+            approved_user_present=connected_presence.approved_user_present,
+            decision=decision.decision,
+            reason=decision.reason,
+            present_devices=[to_device_response(d) for d in connected_presence.connected_devices]
+        )
+    finally:
+        session.close()
+
+@app.post("/monitoring/run-cycle", response_model=MonitoringCycleResponse)
+def run_monitoring_cycle():
+    """ Frontend requirement: Manually trigger a full cycle """
+    session = get_db_session()
+    try:
+        scanner = NetworkScanner()
+        discovered = scanner.scan()
+        services = build_services(session)
+        services["device_service"].process_scan_results(discovered)
+        
+        csi_detected = csi_provider.is_presence_detected()
+        connected_presence = services["presence_service"].get_presence_snapshot()
+        nearby_devices = WifiProbingService(session).list_recent_devices(limit=50)
+        
+        context = CorrelationContext(
+            csi_presence_detected=csi_detected,
+            nearby_device_count=len(nearby_devices),
+            connected_presence=connected_presence
+        )
+        decision = services["correlation_service"].evaluate(context)
+        
+        return MonitoringCycleResponse(
+            csi_presence_detected=csi_detected,
+            approved_user_present=connected_presence.approved_user_present,
+            decision=decision.decision,
+            reason=decision.reason,
+            processed_devices_count=len(discovered),
+            present_devices_count=len(connected_presence.connected_devices),
+            authorized_devices_count=len(connected_presence.authorised_connected_devices),
+            pending_devices_count=len(connected_presence.pending_connected_devices),
+            blocked_devices_count=len(connected_presence.blocked_connected_devices)
+        )
+    finally:
+        session.close()
