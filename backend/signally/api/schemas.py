@@ -3,7 +3,7 @@ Pydantic schemas for the Signally API.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -24,47 +24,22 @@ class EventResponse(BaseModel):
     created_at: datetime
 
 
-class MonitoringCycleResponse(BaseModel):
-    csi_presence_detected: bool
-    approved_user_present: bool
-    decision: str
-    reason: str
-    processed_devices_count: int
-    present_devices_count: int
-    authorized_devices_count: int
-    pending_devices_count: int
-    blocked_devices_count: int
-
-
-class SystemStateResponse(BaseModel):
-    csi_presence_detected: bool
-    approved_user_present: bool
-    decision: str
-    reason: str
-    present_devices: List[DeviceResponse]
-
-
 class MessageResponse(BaseModel):
     message: str
 
 
+class WifiProbingStartRequest(BaseModel):
+    interface: Optional[str] = None
+    mock_mode: bool = False
+
+
+class WifiProbingStatusResponse(BaseModel):
+    running: bool
+    interface: Optional[str]
+    mock_mode: bool
+    started_at: Optional[datetime]
+    last_error: Optional[str]
+
+
 class SetCsiPresenceRequest(BaseModel):
     detected: bool
-
-
-class SimulateDeviceRequest(BaseModel):
-    ip_address: str
-    mac_address: str
-
-
-class WifiModeRequest(BaseModel):
-    mode: str
-
-
-class CsiModeRequest(BaseModel):
-    mode: str
-
-
-class ModeStateResponse(BaseModel):
-    wifi_mode: str
-    csi_mode: str

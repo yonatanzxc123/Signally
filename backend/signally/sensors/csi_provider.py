@@ -1,13 +1,11 @@
 """
-Abstract CSI provider.
+CSI presence provider abstractions.
 """
 
-from abc import ABC, abstractmethod
 from typing import Optional
 
 
-class CsiDetectionProvider(ABC):
-    @abstractmethod
+class CsiDetectionProvider:
     def is_presence_detected(self) -> bool:
         raise NotImplementedError
 
@@ -15,11 +13,19 @@ class CsiDetectionProvider(ABC):
         return None
 
 
-class AlwaysOnCsiProvider(CsiDetectionProvider):
-    def is_presence_detected(self) -> bool:
-        return True
+class FlagCsiDetectionProvider(CsiDetectionProvider):
+    def __init__(self, detected: bool = False, strength: Optional[float] = None) -> None:
+        self._detected = detected
+        self._strength = strength
 
-
-class AlwaysOffCsiProvider(CsiDetectionProvider):
     def is_presence_detected(self) -> bool:
-        return False
+        return self._detected
+
+    def get_presence_strength(self) -> Optional[float]:
+        return self._strength
+
+    def set_detected(self, value: bool) -> None:
+        self._detected = value
+
+    def set_strength(self, value: Optional[float]) -> None:
+        self._strength = value

@@ -38,6 +38,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=2,
         help="ARP response timeout in seconds",
     )
+    probe_parser = subparsers.add_parser(
+    "sniff-wifi-probes",
+    help="Capture nearby Wi-Fi management/probe frames",
+)
+    probe_parser.add_argument("--interface", default=None, help="Monitor-mode interface, e.g. wlan0mon")
+    probe_parser.add_argument("--duration", type=int, default=30, help="Capture duration in seconds")
+    probe_parser.add_argument("--mock", action="store_true", help="Run in mock mode")
+    probe_parser.add_argument("--mock-mac", default="AA:BB:CC:DD:EE:99", help="Mock MAC address")
+    probe_parser.add_argument("--mock-ssid", default="MockPhone", help="Mock SSID")
+    probe_parser.add_argument("--mock-rssi", type=int, default=-55, help="Mock RSSI")
 
     approve_parser = subparsers.add_parser("approve", help="Approve a device")
     approve_parser.add_argument("--mac", required=True, help="Device MAC address")
@@ -157,6 +167,30 @@ def main() -> None:
                     result["deleted_events"],
                 )
             )
+        elif args.command == "sniff-wifi-probes":
+            detector = WifiProbeDetector(interface=args.interface, mock_mode=args.mock)
+            service = WifiProbingService(session)
+            stop_event = threading.Event()
+            timer = threading.Timer(float(args.duration), stop_event.set)
+
+            try:
+                if args.mock:
+                    detector.add_mock_detection(
+                        mac_address=args.mock_mac,
+                        ssid=args.mock_ssid,
+                        rssi=args.mock_rssi,
+                        frame_type="probe_req",
+                    )
+
+                service.log_started(args.interface, args.mock)
+                timer.start()
+                detector.run(on_detection=service.handle_detection, stop_event=stop_event)
+            finally:
+                timer.cancel()
+                service.log_stopped(args.interface)
+
+            print("Wi-Fi probing run completed.")
+
 
 
 if __name__ == "__main__":
