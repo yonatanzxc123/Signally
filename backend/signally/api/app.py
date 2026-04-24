@@ -1,35 +1,37 @@
 """
 FastAPI application for Signally.
 
-This API exposes:
+Current backend focus:
 - device/admin endpoints
 - event endpoints
-- monitoring endpoints
+- ARP scan endpoint
+- Wi-Fi probing endpoints
+- simple CSI flag endpoint (to be changed)
 """
 
 from __future__ import annotations
+
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 
 from signally.api.dependencies import (
     build_services,
+    csi_provider,
     get_db_session,
+    wifi_probing_state,
 )
 from signally.api.schemas import (
     DeviceResponse,
     EventResponse,
     MessageResponse,
-    MonitoringCycleResponse,
     SetCsiPresenceRequest,
-    SimulateDeviceRequest,
-    SystemStateResponse,
-    WifiModeRequest,
-    CsiModeRequest,
+    WifiProbingStartRequest,
+    WifiProbingStatusResponse,
 )
 from signally.db.init_db import initialize_database
-from signally.models.device import DeviceStatus
-from signally.network_scanner.dto import DiscoveredDevice
 from signally.network_scanner.scanner import NetworkScanner
+from signally.wifi_probing.wifi_probing_service import WifiProbingService
 
 
 app = FastAPI(title="Signally API", version="1.0.0")
@@ -58,7 +60,6 @@ def to_event_response(event) -> EventResponse:
 @app.on_event("startup")
 def on_startup() -> None:
     initialize_database()
-    seed_demo_owner_if_missing()
 
 
 @app.get("/health", response_model=MessageResponse)
@@ -66,17 +67,17 @@ def health() -> MessageResponse:
     return MessageResponse(message="Signally API is running.")
 
 
-# TEMPORARY: direct ARP scan endpoint used until Raspberry Pi handles scanning.
-# Remove this endpoint and wire scan button to POST /monitoring/run-cycle once Pi is integrated.
 @app.post("/scan", response_model=list[DeviceResponse])
 def scan_network():
     session = get_db_session()
     try:
         scanner = NetworkScanner()
         discovered = scanner.scan()
+
         services = build_services(session)
         processed = services["device_service"].process_scan_results(discovered)
-        return [to_device_response(d) for d in processed]
+
+        return [to_device_response(device) for device in processed]
     finally:
         session.close()
 
@@ -131,21 +132,6 @@ def block_device(mac_address: str):
         session.close()
 
 
-@app.get("/events", response_model=list[EventResponse])
-def list_events(limit: int = 50):
-    session = get_db_session()
-    try:
-        services = build_services(session)
-        events = services["event_service"].list_recent_events(limit=limit)
-        return [to_event_response(event) for event in events]
-    finally:
-        session.close()
-
-
-
-
-
-
 @app.delete("/devices/{mac_address}", response_model=MessageResponse)
 def delete_device(mac_address: str):
     session = get_db_session()
@@ -155,10 +141,21 @@ def delete_device(mac_address: str):
             services["admin_manager"].delete_device(mac_address)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
+
         return MessageResponse(message="Device deleted successfully.")
     finally:
-        session.close()    
+        session.close()
 
+
+@app.get("/events", response_model=list[EventResponse])
+def list_events(limit: int = 50):
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        events = services["event_service"].list_recent_events(limit=limit)
+        return [to_event_response(event) for event in events]
+    finally:
+        session.close()
 
 
 @app.delete("/admin/devices", response_model=MessageResponse)
@@ -203,14 +200,13 @@ def reset_database_content():
         session.close()
 
 
-
-# Wifi probing endpoints
 @app.post("/wifi_probing/start", response_model=MessageResponse)
 def start_wifi_probing(request: WifiProbingStartRequest):
     try:
         wifi_probing_state.start(interface=request.interface, mock_mode=request.mock_mode)
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
     return MessageResponse(message="Wi-Fi probing started.")
 
 
@@ -242,3 +238,38 @@ def list_wifi_probing_devices(limit: int = 50):
     finally:
         session.close()
 
+
+@app.post("/wifi_probing/mock-detection", response_model=MessageResponse)
+def add_mock_wifi_probe_detection(
+    mac_address: str,
+    ssid: Optional[str] = None,
+    rssi: Optional[int] = None,
+    frame_type: str = "probe_req",
+    channel: Optional[int] = None,
+):
+    try:
+        wifi_probing_state.add_mock_detection(
+            mac_address=mac_address,
+            ssid=ssid,
+            rssi=rssi,
+            frame_type=frame_type,
+            channel=channel,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return MessageResponse(message="Mock Wi-Fi probing detection added.")
+
+
+@app.post("/csi/set", response_model=MessageResponse)
+def set_csi_presence(request: SetCsiPresenceRequest):
+    csi_provider.set_detected(request.detected)
+    return MessageResponse(message="CSI presence set to {0}.".format(request.detected))
+
+
+@app.get("/csi/status")
+def get_csi_status():
+    return {
+        "presence_detected": csi_provider.is_presence_detected(),
+        "presence_strength": csi_provider.get_presence_strength(),
+    }

@@ -28,18 +28,10 @@ class MessageResponse(BaseModel):
     message: str
 
 
-class WifiProbingStartRequest(BaseModel):
-    interface: Optional[str] = None
-    mock_mode: bool = False
-
-
-class WifiProbingStatusResponse(BaseModel):
-    running: bool
-    interface: Optional[str]
-    mock_mode: bool
-    started_at: Optional[datetime]
-    last_error: Optional[str]
-
-
 class SetCsiPresenceRequest(BaseModel):
     detected: bool
+
+
+class CsiPresenceResponse(BaseModel):
+    detected: bool
+    strength: Optional[float]

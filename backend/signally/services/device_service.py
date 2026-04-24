@@ -101,18 +101,14 @@ class DeviceService:
         return count
     
 
-
-    from typing import Tuple
-from signally.config import UNASSOCIATED_IP_ADDRESS
-
-def upsert_seen_device(self, mac_address: str, ip_address: Optional[str] = None) -> Tuple[Device, bool]:
+def upsert_seen_device(self, mac_address: str, ip_address: str) -> Tuple[Device, bool]:
     normalized_mac = mac_address.upper()
     device = self.get_by_mac(normalized_mac)
 
     if device is None:
         device = Device(
             mac_address=normalized_mac,
-            ip_address=ip_address or UNASSOCIATED_IP_ADDRESS,
+            ip_address=ip_address,
             first_seen=utc_now(),
             last_seen=utc_now(),
             status=DeviceStatus.PENDING,
@@ -122,11 +118,7 @@ def upsert_seen_device(self, mac_address: str, ip_address: Optional[str] = None)
         self.session.refresh(device)
         return device, True
 
-    if ip_address and ip_address != UNASSOCIATED_IP_ADDRESS:
-        device.ip_address = ip_address
-    elif not device.ip_address:
-        device.ip_address = UNASSOCIATED_IP_ADDRESS
-
+    device.ip_address = ip_address
     device.last_seen = utc_now()
     self.session.commit()
     self.session.refresh(device)

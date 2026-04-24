@@ -25,6 +25,19 @@ class EventService:
         stmt = select(Event).order_by(desc(Event.created_at)).limit(limit)
         return list(self.session.scalars(stmt).all())
 
+    def list_recent_events_by_types(
+        self,
+        event_types: Sequence[str],
+        limit: int = 500,
+    ) -> List[Event]:
+        stmt = (
+            select(Event)
+            .where(Event.event_type.in_(list(event_types)))
+            .order_by(desc(Event.created_at))
+            .limit(limit)
+        )
+        return list(self.session.scalars(stmt).all())
+
     def delete_all_events(self) -> int:
         events = self.list_recent_events(limit=1000000)
         count = len(events)
@@ -34,13 +47,3 @@ class EventService:
 
         self.session.commit()
         return count
-    
-
-    def list_recent_events_by_types(self, event_types: Sequence[str], limit: int = 500) -> List[Event]:
-    stmt = (
-        select(Event)
-        .where(Event.event_type.in_(list(event_types)))
-        .order_by(desc(Event.created_at))
-        .limit(limit)
-    )
-    return list(self.session.scalars(stmt).all())
