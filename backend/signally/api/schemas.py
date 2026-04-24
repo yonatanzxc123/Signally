@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 class DeviceResponse(BaseModel):
     mac_address: str
-    ip_address: str
+    ip_address: Optional[str] = None
     status: str
     first_seen: datetime
     last_seen: datetime

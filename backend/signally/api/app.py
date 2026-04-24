@@ -100,8 +100,18 @@ def to_event_response(event) -> EventResponse:
 @app.on_event("startup")
 def on_startup() -> None:
     initialize_database()
-    # Start the automatic scanning loop
+    
+    # 1. Start the ARP & Correlation background loop
     threading.Thread(target=run_background_monitor, daemon=True).start()
+    
+    # 2. Auto-start the Wi-Fi Probing Layer (Layer 2)
+    # Using mock_mode=True until we  getsthe physical Wi-Fi adapter
+    try:
+        wifi_probing_state.start(interface=None, mock_mode=True)
+        print("[STARTUP] Layer 2 Wi-Fi Probing started in MOCK mode.")
+    except Exception as e:
+        print(f"[STARTUP] Could not start Wi-Fi probing: {e}")
+
 
 @app.get("/health", response_model=MessageResponse)
 def health() -> MessageResponse:

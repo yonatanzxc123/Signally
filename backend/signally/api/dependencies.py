@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from signally.admin.admin_manager import AdminManager
 from signally.db.session import SessionLocal
-from signally.sensors.csi_provider import FlagCsiDetectionProvider
+from signally.sensors.csi_provider import FlagCsiDetectionProvider, RealCsiDetectionProvider
 from signally.services.alert_service import AlertService
 from signally.services.correlation_service import CorrelationService
 from signally.services.device_service import DeviceService
@@ -14,7 +14,15 @@ from signally.services.event_service import EventService
 from signally.services.presence_service import PresenceService
 
 
-csi_provider = FlagCsiDetectionProvider()
+#--- CONFIGURABLE CSI TOGGLE ---
+# Set to "True" when we want to use the actual Raspberry Pi Wi-Fi adapter stream.
+# Set to "False" for we to use the mock one.
+USE_REAL_CSI = os.getenv("SIGNALLY_USE_REAL_CSI", "False").lower() == "false"
+
+if USE_REAL_CSI:
+    csi_provider = RealCsiDetectionProvider(udp_ip="127.0.0.1", udp_port=5500)
+else:
+    csi_provider = FlagCsiDetectionProvider()
 
 
 def get_db_session() -> Session:
