@@ -20,6 +20,7 @@ from signally.config import MONITOR_INTERVAL_SECONDS
 from signally.db.init_db import initialize_database
 from signally.network_scanner.scanner import NetworkScanner
 from signally.wifi_probing.wifi_probing_service import WifiProbingService
+from scapy.all import get_if_list  
 
 
 from signally.api.dependencies import (
@@ -36,6 +37,8 @@ from signally.api.schemas import (
     SetCsiPresenceRequest,
     WifiProbingStartRequest,
     WifiProbingStatusResponse,
+    SystemStateResponse,
+    MonitoringCycleResponse
 )
 
 
@@ -98,6 +101,7 @@ def to_event_response(event) -> EventResponse:
     )
 
 
+
 @app.on_event("startup")
 def on_startup() -> None:
     initialize_database()
@@ -105,14 +109,27 @@ def on_startup() -> None:
     # 1. Start the ARP & Correlation background loop
     threading.Thread(target=run_background_monitor, daemon=True).start()
     
-    # 2. Auto-start the Wi-Fi Probing Layer (Layer 2)
-    # Using mock_mode=True until we  getsthe physical Wi-Fi adapter
+    # 2. Auto-Fallback for Layer 2 (Wi-Fi Probing)
+    # This is the name we expect the Wavlink to have once in monitor mode
+    EXPECTED_WIFI_INTERFACE = "wlan1mon" 
+    
     try:
-        wifi_probing_state.start(interface=None, mock_mode=True)
-        print("[STARTUP] Layer 2 Wi-Fi Probing started in MOCK mode.")
-    except Exception as e:
-        print(f"[STARTUP] Could not start Wi-Fi probing: {e}")
+        # VALIDATION STEP: Check if the interface is actually plugged in
+        available_interfaces = get_if_list()
+        
+        if EXPECTED_WIFI_INTERFACE not in available_interfaces:
+            raise ValueError(f"Interface {EXPECTED_WIFI_INTERFACE} is not connected.")
 
+        # ATTEMPT: Try to bind to the physical Wavlink antenna
+        wifi_probing_state.start(interface=EXPECTED_WIFI_INTERFACE, mock_mode=False)
+        print(f"[STARTUP] SUCCESS: Layer 2 Wi-Fi Probing started in REAL mode on {EXPECTED_WIFI_INTERFACE}.")
+        
+    except Exception as hardware_error:
+        # FALLBACK: Adapter missing or driver not loaded? Silently fall back to Mock!
+        print(f"[STARTUP] Hardware bypass ({hardware_error}). Layer 2 falling back to MOCK mode.")
+        wifi_probing_state.start(interface=None, mock_mode=True)
+
+        
 
 @app.get("/health", response_model=MessageResponse)
 def health() -> MessageResponse:

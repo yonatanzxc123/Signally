@@ -54,3 +54,15 @@ class MonitoringCycleResponse(BaseModel):
     authorized_devices_count: int
     pending_devices_count: int
     blocked_devices_count: int
+
+
+class WifiProbingStartRequest(BaseModel):
+    interface: Optional[str] = None
+    mock_mode: bool = False
+
+class WifiProbingStatusResponse(BaseModel):
+    running: bool
+    interface: Optional[str] = None
+    mock_mode: bool
+    started_at: Optional[datetime] = None
+    last_error: Optional[str] = None

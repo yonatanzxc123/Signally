@@ -8,6 +8,7 @@ import socket
 import struct
 import math
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +49,15 @@ class RealCsiDetectionProvider(CsiDetectionProvider):
         
         self.udp_ip = udp_ip
         self.udp_port = udp_port
+        self._last_packet_time = 0.0   # Track when we last got data
         
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._capture_loop, daemon=True)
         self._thread.start()
+
+    def is_receiving_data(self) -> bool:    
+        # Returns True if  a real CSI packet was recived in the last 3 seconds, otherwise False.
+        return (time.time() - self._last_packet_time) < 3.0 
 
     def is_presence_detected(self) -> bool:
         return self._detected
@@ -85,6 +91,7 @@ class RealCsiDetectionProvider(CsiDetectionProvider):
         while not self._stop_event.is_set():
             try:
                 data, _ = sock.recvfrom(4096)
+                self._last_packet_time = time.time()
                 
                 # NOTE: Nexmon payloads require specific struct unpacking.
                 # Example: bypassing the MAC header and extracting complex numbers (I & Q)
@@ -113,3 +120,35 @@ class RealCsiDetectionProvider(CsiDetectionProvider):
                 logger.error("CSI Stream Error: %s", e)
                 
         sock.close()
+    
+    def set_detected(self, value: bool) -> None:
+       # Safety method to prevent crashes during manual testing.
+        self._detected = value
+
+
+
+
+# Auto-fallback to "not detected" if we haven't received any data for a while
+class AutoFallbackCsiProvider(CsiDetectionProvider):
+    def __init__(self):
+        self.real = RealCsiDetectionProvider()
+        self.mock = FlagCsiDetectionProvider()
+
+    def is_presence_detected(self) -> bool:
+        # If the Pi is actually sending data, use it. Otherwise, use Mock.
+        if self.real.is_receiving_data():
+            return self.real.is_presence_detected()
+        # Automatically fall back if the Pi is off!
+        return self.mock.is_presence_detected()
+
+    def get_presence_strength(self) -> Optional[float]:
+        if self.real.is_receiving_data():
+            return self.real.get_presence_strength()
+        return self.mock.get_presence_strength()
+
+    def set_detected(self, value: bool) -> None:
+        # Route your Swagger API testing clicks to the mock provider
+        self.mock.set_detected(value)
+        
+    def set_strength(self, value: Optional[float]) -> None:
+        self.mock.set_strength(value)

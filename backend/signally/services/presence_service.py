@@ -7,7 +7,7 @@ This service answers:
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import timedelta, timezone
 from typing import List, Set
 
 from sqlalchemy.orm import Session
@@ -55,7 +55,12 @@ class PresenceService:
         devices = []
 
         for event in events:
-            if event.created_at < cutoff or not event.device_mac:
+         
+            event_time = event.created_at
+            if event_time.tzinfo is None:
+                event_time = event_time.replace(tzinfo=timezone.utc)
+
+            if event_time < cutoff or not event.device_mac:
                 continue
 
             mac_address = event.device_mac.upper()
