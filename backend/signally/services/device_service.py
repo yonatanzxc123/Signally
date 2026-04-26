@@ -101,7 +101,7 @@ class DeviceService:
         return count
     
 
-def upsert_seen_device(self, mac_address: str, ip_address: Optional[str]) -> Tuple[Device, bool]:
+    def upsert_seen_device(self, mac_address: str, ip_address: Optional[str]) -> Tuple[Device, bool]:
         normalized_mac = mac_address.upper()
         device = self.get_by_mac(normalized_mac)
 
