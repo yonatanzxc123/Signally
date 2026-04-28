@@ -21,6 +21,8 @@ const EVENT_TYPE_MAP: Record<string, EventType> = {
   UNAUTHORIZED_PRESENCE_ALERT: 'unknown_detected',
   BLOCKED_DEVICE_ALERT: 'device_blocked',
   MONITORING_CYCLE_COMPLETED: 'scan_complete',
+  WIFI_PROBE_DEVICE_DISCOVERED_NEW: 'unknown_detected',
+  WIFI_PROBE_DEVICE_SEEN_AGAIN: 'scan_complete',
 };
 
 const EVENT_MESSAGE_MAP: Record<string, string> = {
@@ -33,6 +35,8 @@ const EVENT_MESSAGE_MAP: Record<string, string> = {
   UNAUTHORIZED_PRESENCE_ALERT: 'Unauthorized presence alert',
   BLOCKED_DEVICE_ALERT: 'Blocked device detected',
   MONITORING_CYCLE_COMPLETED: 'Network scan completed',
+  WIFI_PROBE_DEVICE_DISCOVERED_NEW: 'Nearby device detected via probe request',
+  WIFI_PROBE_DEVICE_SEEN_AGAIN: 'Nearby device seen again via probe',
 };
 
 function mapEvent(e: ApiEvent): NetworkEvent {

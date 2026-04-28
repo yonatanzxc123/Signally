@@ -76,8 +76,13 @@ export const api = {
   deleteDevice: (mac: string) =>
     request<ApiMessage>(`/devices/${encodeURIComponent(mac)}`, { method: 'DELETE' }),
 
-  // TEMPORARY: calls direct ARP scan endpoint. Replace with runMonitoringCycle once Raspberry Pi is integrated.
   scanNetwork: () => request<ApiDevice[]>('/scan', { method: 'POST' }),
+
+  // Wifi Probing
+  startWifiProbing: () => request<ApiMessage>('/wifi_probing/start', { method: 'POST' }),
+  stopWifiProbing: () => request<ApiMessage>('/wifi_probing/stop', { method: 'POST' }),
+  getWifiProbingStatus: () => request<{ running: boolean; interface: string | null }>('/wifi_probing/status'),
+  getWifiProbingDevices: () => request<ApiDevice[]>('/wifi_probing/devices'),
 
   // Events
   getEvents: (limit = 50) => request<ApiEvent[]>(`/events?limit=${limit}`),
