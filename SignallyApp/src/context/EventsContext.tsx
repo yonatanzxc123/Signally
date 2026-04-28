@@ -55,8 +55,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
     queryFn: () => api.getEvents(100),
     refetchInterval: 5_000,
     refetchIntervalInBackground: true,
-    retry: true,
-    retryDelay: 5_000,
+    retry: false,
   });
 
   const events = (data ?? []).map(mapEvent);
