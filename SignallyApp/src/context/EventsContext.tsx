@@ -53,10 +53,10 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['events'],
     queryFn: () => api.getEvents(100),
-    refetchInterval: 15_000,
+    refetchInterval: 5_000,
     refetchIntervalInBackground: true,
-    retry: 2,
-    retryDelay: 3_000,
+    retry: true,
+    retryDelay: 5_000,
   });
 
   const events = (data ?? []).map(mapEvent);

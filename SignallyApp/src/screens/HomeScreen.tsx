@@ -30,8 +30,8 @@ export default function HomeScreen() {
   const scanMutation = useMutation({
     mutationFn: api.runMonitoringCycle,
     onSuccess: () => {
-      queryClient.refetchQueries({ queryKey: ['devices'] });
-      queryClient.refetchQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
     },
   });
 
