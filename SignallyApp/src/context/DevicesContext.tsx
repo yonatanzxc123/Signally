@@ -37,6 +37,9 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     queryKey: ['devices'],
     queryFn: api.getDevices,
     refetchInterval: 15_000,
+    refetchIntervalInBackground: true,
+    retry: 2,
+    retryDelay: 3_000,
   });
 
   function optimisticallyUpdateStatus(mac: string, newStatus: ApiDevice['status']) {
