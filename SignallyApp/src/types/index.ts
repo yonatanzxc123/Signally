@@ -11,7 +11,7 @@ export interface Device {
   id: string;
   mac: string;
   name: string;
-  ip: string;
+  ip: string | null;
   status: DeviceStatus;
   lastSeen: string;
   vendor: string;

@@ -51,7 +51,19 @@ export default function DeviceItem({ device, onApprove, onBlock, onPress }: Prop
         <View style={styles.info}>
           <Text style={styles.name}>{device.name}</Text>
           <Text style={styles.mac}>{device.mac}</Text>
-          <Text style={styles.meta}>{device.ip} · {device.lastSeen}</Text>
+          <View style={styles.metaRow}>
+            <View style={[styles.connTag, device.ip ? styles.connTagConnected : styles.connTagNearby]}>
+              <Ionicons
+                name={device.ip ? 'wifi' : 'radio-outline'}
+                size={10}
+                color={device.ip ? colors.accent : colors.textSecondary}
+              />
+              <Text style={[styles.connTagText, { color: device.ip ? colors.accent : colors.textSecondary }]}>
+                {device.ip ? 'Connected' : 'Nearby'}
+              </Text>
+            </View>
+            <Text style={styles.meta}>{device.ip ?? '—'} · {device.lastSeen}</Text>
+          </View>
         </View>
         <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
           <Ionicons name={cfg.icon} size={12} color={cfg.color} style={styles.badgeIcon} />
@@ -117,6 +129,31 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontFamily: 'monospace',
     marginBottom: 2,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: 2,
+  },
+  connTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: radius.full,
+    gap: 3,
+  },
+  connTagConnected: {
+    backgroundColor: '#EFF6FF',
+  },
+  connTagNearby: {
+    backgroundColor: colors.divider,
+  },
+  connTagText: {
+    fontSize: 10,
+    fontWeight: '600',
   },
   meta: {
     fontSize: font.sm,

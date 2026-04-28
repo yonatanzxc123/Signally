@@ -11,7 +11,7 @@ export type BackendDeviceStatus = 'PENDING' | 'AUTHORIZED' | 'BLOCKED';
 
 export interface ApiDevice {
   mac_address: string;
-  ip_address: string;
+  ip_address: string | null;
   status: BackendDeviceStatus;
   first_seen: string;
   last_seen: string;
