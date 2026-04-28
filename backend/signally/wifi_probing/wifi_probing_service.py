@@ -12,9 +12,10 @@ from signally.config import (
     EVENT_WIFI_PROBE_DEVICE_DISCOVERED_NEW,
     EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN,
     EVENT_WIFI_PROBING_ERROR,
-    WIFI_PROBING_RECENT_EVENT_LIMIT,  # <-- FIXED: Removed "EVENT_" prefix
+    WIFI_PROBING_RECENT_EVENT_LIMIT,
     EVENT_WIFI_PROBING_STARTED,
     EVENT_WIFI_PROBING_STOPPED,
+    NETWORK_SSID,
 )
 from signally.models.device import Device
 from signally.services.device_service import DeviceService
@@ -34,7 +35,10 @@ class WifiProbingService:
         self.device_service = DeviceService(session)
         self.event_service = EventService(session)
 
-    def handle_detection(self, detection: WifiProbeDetection) -> Device:
+    def handle_detection(self, detection: WifiProbeDetection) -> "Device | None":
+        if NETWORK_SSID and detection.ssid != NETWORK_SSID:
+            return None
+
         device, created = self.device_service.upsert_seen_device(
             mac_address=detection.mac_address,
             ip_address=None,

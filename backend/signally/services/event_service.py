@@ -4,7 +4,7 @@ Service for writing and reading events.
 
 from typing import List, Optional, Sequence
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from signally.models.event import Event
@@ -32,6 +32,21 @@ class EventService:
     ) -> List[Event]:
         stmt = (
             select(Event)
+            .where(Event.event_type.in_(list(event_types)))
+            .order_by(desc(Event.created_at))
+            .limit(limit)
+        )
+        return list(self.session.scalars(stmt).all())
+
+    def list_events_for_device_by_types(
+        self,
+        device_mac: str,
+        event_types: Sequence[str],
+        limit: int = 100,
+    ) -> List[Event]:
+        stmt = (
+            select(Event)
+            .where(func.upper(Event.device_mac) == device_mac.upper())
             .where(Event.event_type.in_(list(event_types)))
             .order_by(desc(Event.created_at))
             .limit(limit)

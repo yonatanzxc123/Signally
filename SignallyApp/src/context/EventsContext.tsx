@@ -39,12 +39,46 @@ const EVENT_MESSAGE_MAP: Record<string, string> = {
   WIFI_PROBE_DEVICE_SEEN_AGAIN: 'Nearby device seen again via probe',
 };
 
+const PROBE_EVENT_TYPES = new Set([
+  'WIFI_PROBE_DEVICE_DISCOVERED_NEW',
+  'WIFI_PROBE_DEVICE_SEEN_AGAIN',
+]);
+
+function parseProbeDetails(details: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const part of details.split('; ')) {
+    const idx = part.indexOf('=');
+    if (idx !== -1) result[part.slice(0, idx).trim()] = part.slice(idx + 1).trim();
+  }
+  return result;
+}
+
+function signalLabel(rssi: number): string {
+  if (rssi >= -60) return `Strong (${rssi} dBm)`;
+  if (rssi >= -75) return `Medium (${rssi} dBm)`;
+  return `Weak (${rssi} dBm)`;
+}
+
+function formatProbeDetail(mac: string | null, details: string): string {
+  const parsed = parseProbeDetails(details);
+  const ssid = parsed['ssid']?.trim();
+  const rssi = parsed['rssi'] ? parseInt(parsed['rssi']) : null;
+  const ssidPart = ssid ? `"${ssid}"` : 'Unknown network';
+  const signalPart = rssi != null ? ` · ${signalLabel(rssi)}` : '';
+  return `${ssidPart}${signalPart}`;
+}
+
 function mapEvent(e: ApiEvent): NetworkEvent {
+  const isProbe = PROBE_EVENT_TYPES.has(e.event_type);
+  const detail = isProbe
+    ? formatProbeDetail(e.device_mac, e.details)
+    : e.device_mac ? `${e.device_mac} — ${e.details}` : e.details;
+
   return {
     id: String(e.id),
     type: EVENT_TYPE_MAP[e.event_type] ?? 'system',
     message: EVENT_MESSAGE_MAP[e.event_type] ?? e.event_type,
-    detail: e.device_mac ? `${e.device_mac} — ${e.details}` : e.details,
+    detail,
     timestamp: new Date(e.created_at),
   };
 }

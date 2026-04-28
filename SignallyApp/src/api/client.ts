@@ -49,18 +49,33 @@ export interface ApiMessage {
   message: string;
 }
 
+export interface ApiProbeInfo {
+  mac_address: string;
+  vendor: string | null;
+  known_ssids: string[];
+  latest_rssi: number | null;
+  is_nearby_only: boolean;
+}
+
 // ── Core fetch helper ──────────────────────────────────────────────────────
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`API ${res.status}: ${body}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(`${BASE_URL}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      ...options,
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`API ${res.status}: ${body}`);
+    }
+    return res.json() as Promise<T>;
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json() as Promise<T>;
 }
 
 // ── API ────────────────────────────────────────────────────────────────────
@@ -77,6 +92,9 @@ export const api = {
     request<ApiMessage>(`/devices/${encodeURIComponent(mac)}`, { method: 'DELETE' }),
 
   scanNetwork: () => request<ApiDevice[]>('/scan', { method: 'POST' }),
+
+  getDeviceProbeInfo: (mac: string) =>
+    request<ApiProbeInfo>(`/probe-info/${encodeURIComponent(mac)}`),
 
   // Wifi Probing
   startWifiProbing: () => request<ApiMessage>('/wifi_probing/start', { method: 'POST' }),
