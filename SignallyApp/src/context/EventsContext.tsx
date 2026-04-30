@@ -62,7 +62,7 @@ function mapEvent(e: ApiEvent): NetworkEvent {
 export function EventsProvider({ children }: { children: React.ReactNode }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['events'],
-    queryFn: () => api.getEvents(100),
+    queryFn: () => api.getEvents(500),
     refetchInterval: 5_000,
     refetchIntervalInBackground: true,
     retry: false,

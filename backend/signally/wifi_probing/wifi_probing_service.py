@@ -52,11 +52,6 @@ class WifiProbingService:
                         mac_address=existing.mac_address,
                         ip_address=None,
                     )
-                    self.event_service.log_event(
-                        event_type=EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN,
-                        details=self._build_details(detection),
-                        device_mac=existing.mac_address,
-                    )
                     return existing
 
         device, created = self.device_service.upsert_seen_device(
@@ -64,16 +59,12 @@ class WifiProbingService:
             ip_address=None,
         )
 
-        event_type = (
-            EVENT_WIFI_PROBE_DEVICE_DISCOVERED_NEW
-            if created
-            else EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN
-        )
-        self.event_service.log_event(
-            event_type=event_type,
-            details=self._build_details(detection),
-            device_mac=device.mac_address,
-        )
+        if created:
+            self.event_service.log_event(
+                event_type=EVENT_WIFI_PROBE_DEVICE_DISCOVERED_NEW,
+                details=self._build_details(detection),
+                device_mac=device.mac_address,
+            )
         return device
 
     def list_recent_devices(self, limit: int = 50) -> List[Device]:
