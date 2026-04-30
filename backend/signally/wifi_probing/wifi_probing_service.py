@@ -39,6 +39,26 @@ class WifiProbingService:
         if NETWORK_SSID and detection.ssid != NETWORK_SSID:
             return None
 
+        # Deduplicate by SSID within 60-second window to handle MAC randomization
+        if detection.ssid:
+            recent_event = self.event_service.find_recent_probe_event_by_ssid(
+                ssid=detection.ssid,
+                event_types=(EVENT_WIFI_PROBE_DEVICE_DISCOVERED_NEW, EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN),
+            )
+            if recent_event and recent_event.device_mac:
+                existing = self.device_service.get_by_mac(recent_event.device_mac)
+                if existing:
+                    existing, _ = self.device_service.upsert_seen_device(
+                        mac_address=existing.mac_address,
+                        ip_address=None,
+                    )
+                    self.event_service.log_event(
+                        event_type=EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN,
+                        details=self._build_details(detection),
+                        device_mac=existing.mac_address,
+                    )
+                    return existing
+
         device, created = self.device_service.upsert_seen_device(
             mac_address=detection.mac_address,
             ip_address=None,
