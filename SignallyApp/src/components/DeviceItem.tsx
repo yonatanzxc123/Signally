@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, font } from '../theme';
 import { Device } from '../types';
+import { useEvents } from '../context/EventsContext';
 
 interface Props {
   device: Device;
@@ -41,6 +42,8 @@ const STATUS_CONFIG: Record<string, StatusConfig> = {
 
 export default function DeviceItem({ device, onApprove, onBlock, onPress }: Props) {
   const cfg = STATUS_CONFIG[device.status];
+  const { ssidsByMac } = useEvents();
+  const probedSsids = !device.ip ? (ssidsByMac[device.mac.toUpperCase()] ?? []) : [];
 
   return (
     <TouchableOpacity style={styles.card} onPress={() => onPress?.(device.id)} activeOpacity={onPress ? 0.7 : 1}>
@@ -64,6 +67,11 @@ export default function DeviceItem({ device, onApprove, onBlock, onPress }: Prop
             </View>
             <Text style={styles.meta}>{device.ip ?? '—'} · {device.lastSeen}</Text>
           </View>
+          {probedSsids.length > 0 && (
+            <Text style={styles.ssids} numberOfLines={1}>
+              Probing: {probedSsids.slice(0, 3).map(s => `"${s}"`).join(', ')}
+            </Text>
+          )}
         </View>
         <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
           <Ionicons name={cfg.icon} size={12} color={cfg.color} style={styles.badgeIcon} />
@@ -158,6 +166,12 @@ const styles = StyleSheet.create({
   meta: {
     fontSize: font.sm,
     color: colors.textMuted,
+  },
+  ssids: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 2,
   },
   badge: {
     flexDirection: 'row',

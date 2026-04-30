@@ -7,6 +7,7 @@ interface EventsContextValue {
   events: NetworkEvent[];
   isLoading: boolean;
   error: Error | null;
+  ssidsByMac: Record<string, string[]>;
 }
 
 const EventsContext = createContext<EventsContextValue | null>(null);
@@ -68,6 +69,38 @@ function formatProbeDetail(mac: string | null, details: string): string {
   return `${ssidPart}${signalPart}`;
 }
 
+const DEDUP_EVENT_TYPES = new Set([
+  'DEVICE_SEEN_AGAIN',
+  'WIFI_PROBE_DEVICE_SEEN_AGAIN',
+  'MONITORING_CYCLE_COMPLETED',
+]);
+
+function deduplicateEvents(events: ApiEvent[]): ApiEvent[] {
+  const seen = new Set<string>();
+  return events.filter((e) => {
+    if (!DEDUP_EVENT_TYPES.has(e.event_type)) return true;
+    const key = `${e.event_type}:${e.device_mac ?? ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildSsidMap(events: ApiEvent[]): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+  for (const e of events) {
+    if (!e.device_mac) continue;
+    if (e.event_type !== 'WIFI_PROBE_DEVICE_DISCOVERED_NEW' && e.event_type !== 'WIFI_PROBE_DEVICE_SEEN_AGAIN') continue;
+    const match = e.details.match(/ssid=([^;]*)/);
+    const ssid = match?.[1]?.trim();
+    if (!ssid) continue;
+    const mac = e.device_mac.toUpperCase();
+    if (!map[mac]) map[mac] = [];
+    if (!map[mac].includes(ssid)) map[mac].push(ssid);
+  }
+  return map;
+}
+
 function mapEvent(e: ApiEvent): NetworkEvent {
   const isProbe = PROBE_EVENT_TYPES.has(e.event_type);
   const detail = isProbe
@@ -92,10 +125,12 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
     retry: false,
   });
 
-  const events = (data ?? []).map(mapEvent);
+  const raw = data ?? [];
+  const events = deduplicateEvents(raw).map(mapEvent);
+  const ssidsByMac = buildSsidMap(raw);
 
   return (
-    <EventsContext.Provider value={{ events, isLoading, error: error as Error | null }}>
+    <EventsContext.Provider value={{ events, isLoading, error: error as Error | null, ssidsByMac }}>
       {children}
     </EventsContext.Provider>
   );
