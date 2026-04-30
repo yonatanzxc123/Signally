@@ -178,6 +178,17 @@ def list_pending_devices():
         session.close()
 
 
+@app.post("/devices/approve-all", response_model=list[DeviceResponse])
+def approve_all_pending_devices():
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        devices = services["admin_manager"].approve_all_pending_devices()
+        return [to_device_response(device) for device in devices]
+    finally:
+        session.close()
+
+
 @app.post("/devices/{mac_address}/approve", response_model=DeviceResponse)
 def approve_device(mac_address: str):
     session = get_db_session()

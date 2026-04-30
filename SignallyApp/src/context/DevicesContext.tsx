@@ -8,6 +8,7 @@ interface DevicesContextValue {
   isLoading: boolean;
   error: Error | null;
   approveDevice: (id: string) => void;
+  approveAllUnknownDevices: () => void;
   blockDevice: (id: string) => void;
 }
 
@@ -60,6 +61,22 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     onError: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
   });
 
+  const approveAllMutation = useMutation({
+    mutationFn: api.approveAllPendingDevices,
+    onMutate: () => {
+      queryClient.setQueryData<ApiDevice[]>(['devices'], (old) =>
+        old?.map((d) => d.status === 'PENDING' ? { ...d, status: 'AUTHORIZED' } : d) ?? []
+      );
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<ApiDevice[]>(['devices'], (old) => {
+        const updates = new Map(updated.map((d) => [d.mac_address, d]));
+        return old?.map((d) => updates.get(d.mac_address) ?? d) ?? updated;
+      });
+    },
+    onError: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
+  });
+
   const blockMutation = useMutation({
     mutationFn: (mac: string) => api.blockDevice(mac),
     onMutate: (mac) => optimisticallyUpdateStatus(mac, 'BLOCKED'),
@@ -76,6 +93,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         error: error as Error | null,
         approveDevice: (id) => approveMutation.mutate(id),
+        approveAllUnknownDevices: () => approveAllMutation.mutate(),
         blockDevice: (id) => blockMutation.mutate(id),
       }}
     >

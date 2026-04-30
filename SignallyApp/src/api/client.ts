@@ -86,6 +86,8 @@ export const api = {
   getPendingDevices: () => request<ApiDevice[]>('/devices/pending'),
   approveDevice: (mac: string) =>
     request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/approve`, { method: 'POST' }),
+  approveAllPendingDevices: () =>
+    request<ApiDevice[]>('/devices/approve-all', { method: 'POST' }),
   blockDevice: (mac: string) =>
     request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/block`, { method: 'POST' }),
   deleteDevice: (mac: string) =>

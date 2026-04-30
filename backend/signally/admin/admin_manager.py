@@ -5,6 +5,7 @@ Admin manager.
 from signally.models.device import Device, DeviceStatus
 from signally.services.device_service import DeviceService
 from signally.services.event_service import EventService
+from signally.utils.time_utils import utc_now
 
 
 class AdminManager:
@@ -20,6 +21,21 @@ class AdminManager:
             device_mac=device.mac_address,
         )
         return device
+
+    def approve_all_pending_devices(self) -> list[Device]:
+        devices = self.device_service.list_pending_devices()
+
+        for device in devices:
+            device.status = DeviceStatus.AUTHORIZED
+            device.last_seen = utc_now()
+            self.event_service.log_event(
+                event_type="DEVICE_APPROVED",
+                details="Admin approved device via bulk action",
+                device_mac=device.mac_address,
+            )
+
+        self.device_service.session.commit()
+        return devices
 
     def block_device(self, mac_address: str) -> Device:
         device = self.device_service.update_status(mac_address, DeviceStatus.BLOCKED)

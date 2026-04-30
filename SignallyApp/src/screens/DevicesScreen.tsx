@@ -27,18 +27,31 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 export default function DevicesScreen({ navigation }: Props) {
-  const { devices, approveDevice, blockDevice } = useDevices();
+  const { devices, approveDevice, approveAllUnknownDevices, blockDevice } = useDevices();
   const [filter, setFilter] = useState<Filter>('all');
 
+  const unknownCount = devices.filter((d) => d.status === 'unknown').length;
   const filtered = filter === 'all' ? devices : devices.filter((d) => d.status === filter);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Devices</Text>
-        <View style={styles.headerCount}>
-          <Text style={styles.headerCountText}>{devices.length}</Text>
+        <View style={styles.headerTitleRow}>
+          <Text style={styles.title}>Devices</Text>
+          <View style={styles.headerCount}>
+            <Text style={styles.headerCountText}>{devices.length}</Text>
+          </View>
         </View>
+        {unknownCount > 0 && (
+          <TouchableOpacity
+            style={styles.approveAllButton}
+            onPress={approveAllUnknownDevices}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="checkmark-done-circle-outline" size={18} color={colors.surface} />
+            <Text style={styles.approveAllText}>Approve All</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.filterBar}>
@@ -101,12 +114,19 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     gap: spacing.sm,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexShrink: 1,
   },
   title: {
     fontSize: font.xxl,
@@ -120,6 +140,20 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   headerCountText: {
+    color: colors.surface,
+    fontSize: font.sm,
+    fontWeight: '700',
+  },
+  approveAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.approved,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs + 2,
+  },
+  approveAllText: {
     color: colors.surface,
     fontSize: font.sm,
     fontWeight: '700',
