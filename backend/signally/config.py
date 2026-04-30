@@ -9,6 +9,20 @@ without changing business logic code.
 from __future__ import annotations
 
 import os
+import subprocess
+from typing import Optional
+
+
+def _detect_network_ssid() -> Optional[str]:
+    try:
+        result = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True, timeout=2)
+        ssid = result.stdout.strip()
+        return ssid if ssid else None
+    except Exception:
+        return None
+
+
+NETWORK_SSID: Optional[str] = os.getenv("SIGNALLY_NETWORK_SSID") or _detect_network_ssid()
 
 # Database
 DATABASE_URL = os.getenv("SIGNALLY_DATABASE_URL", "sqlite:///signally.db")

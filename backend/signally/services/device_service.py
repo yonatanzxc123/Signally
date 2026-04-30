@@ -61,12 +61,6 @@ class DeviceService:
                 existing.last_seen = utc_now()
                 self.session.commit()
                 self.session.refresh(existing)
-
-                self.event_service.log_event(
-                    event_type="DEVICE_SEEN_AGAIN",
-                    details="Known device seen again at IP {0}".format(existing.ip_address),
-                    device_mac=existing.mac_address,
-                )
                 processed_devices.append(existing)
 
         return processed_devices

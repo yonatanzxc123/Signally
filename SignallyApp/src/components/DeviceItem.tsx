@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, font } from '../theme';
 import { Device } from '../types';
+import { useEvents } from '../context/EventsContext';
 
 interface Props {
   device: Device;
@@ -41,6 +42,8 @@ const STATUS_CONFIG: Record<string, StatusConfig> = {
 
 export default function DeviceItem({ device, onApprove, onBlock, onPress }: Props) {
   const cfg = STATUS_CONFIG[device.status];
+  const { ssidsByMac } = useEvents();
+  const probedSsids = !device.ip ? (ssidsByMac[device.mac.toUpperCase()] ?? []) : [];
 
   return (
     <TouchableOpacity style={styles.card} onPress={() => onPress?.(device.id)} activeOpacity={onPress ? 0.7 : 1}>
@@ -51,7 +54,24 @@ export default function DeviceItem({ device, onApprove, onBlock, onPress }: Prop
         <View style={styles.info}>
           <Text style={styles.name}>{device.name}</Text>
           <Text style={styles.mac}>{device.mac}</Text>
-          <Text style={styles.meta}>{device.ip} · {device.lastSeen}</Text>
+          <View style={styles.metaRow}>
+            <View style={[styles.connTag, device.ip ? styles.connTagConnected : styles.connTagNearby]}>
+              <Ionicons
+                name={device.ip ? 'wifi' : 'radio-outline'}
+                size={10}
+                color={device.ip ? colors.accent : colors.textSecondary}
+              />
+              <Text style={[styles.connTagText, { color: device.ip ? colors.accent : colors.textSecondary }]}>
+                {device.ip ? 'Connected' : 'Nearby'}
+              </Text>
+            </View>
+            <Text style={styles.meta}>{device.ip ?? '—'} · {device.lastSeen}</Text>
+          </View>
+          {probedSsids.length > 0 && (
+            <Text style={styles.ssids} numberOfLines={1}>
+              Probing: {probedSsids.slice(0, 3).map(s => `"${s}"`).join(', ')}
+            </Text>
+          )}
         </View>
         <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
           <Ionicons name={cfg.icon} size={12} color={cfg.color} style={styles.badgeIcon} />
@@ -118,9 +138,40 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     marginBottom: 2,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: 2,
+  },
+  connTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: radius.full,
+    gap: 3,
+  },
+  connTagConnected: {
+    backgroundColor: '#EFF6FF',
+  },
+  connTagNearby: {
+    backgroundColor: colors.divider,
+  },
+  connTagText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
   meta: {
     fontSize: font.sm,
     color: colors.textMuted,
+  },
+  ssids: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 2,
   },
   badge: {
     flexDirection: 'row',

@@ -12,9 +12,10 @@ from signally.config import (
     EVENT_WIFI_PROBE_DEVICE_DISCOVERED_NEW,
     EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN,
     EVENT_WIFI_PROBING_ERROR,
-    WIFI_PROBING_RECENT_EVENT_LIMIT,  # <-- FIXED: Removed "EVENT_" prefix
+    WIFI_PROBING_RECENT_EVENT_LIMIT,
     EVENT_WIFI_PROBING_STARTED,
     EVENT_WIFI_PROBING_STOPPED,
+    NETWORK_SSID,
 )
 from signally.models.device import Device
 from signally.services.device_service import DeviceService
@@ -34,22 +35,36 @@ class WifiProbingService:
         self.device_service = DeviceService(session)
         self.event_service = EventService(session)
 
-    def handle_detection(self, detection: WifiProbeDetection) -> Device:
+    def handle_detection(self, detection: WifiProbeDetection) -> "Device | None":
+        if NETWORK_SSID and detection.ssid != NETWORK_SSID:
+            return None
+
+        # Deduplicate by SSID within 60-second window to handle MAC randomization
+        if detection.ssid:
+            recent_event = self.event_service.find_recent_probe_event_by_ssid(
+                ssid=detection.ssid,
+                event_types=(EVENT_WIFI_PROBE_DEVICE_DISCOVERED_NEW, EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN),
+            )
+            if recent_event and recent_event.device_mac:
+                existing = self.device_service.get_by_mac(recent_event.device_mac)
+                if existing:
+                    existing, _ = self.device_service.upsert_seen_device(
+                        mac_address=existing.mac_address,
+                        ip_address=None,
+                    )
+                    return existing
+
         device, created = self.device_service.upsert_seen_device(
             mac_address=detection.mac_address,
             ip_address=None,
         )
 
-        event_type = (
-            EVENT_WIFI_PROBE_DEVICE_DISCOVERED_NEW
-            if created
-            else EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN
-        )
-        self.event_service.log_event(
-            event_type=event_type,
-            details=self._build_details(detection),
-            device_mac=device.mac_address,
-        )
+        if created:
+            self.event_service.log_event(
+                event_type=EVENT_WIFI_PROBE_DEVICE_DISCOVERED_NEW,
+                details=self._build_details(detection),
+                device_mac=device.mac_address,
+            )
         return device
 
     def list_recent_devices(self, limit: int = 50) -> List[Device]:

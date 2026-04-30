@@ -11,7 +11,7 @@ export type BackendDeviceStatus = 'PENDING' | 'AUTHORIZED' | 'BLOCKED';
 
 export interface ApiDevice {
   mac_address: string;
-  ip_address: string;
+  ip_address: string | null;
   status: BackendDeviceStatus;
   first_seen: string;
   last_seen: string;
@@ -49,18 +49,33 @@ export interface ApiMessage {
   message: string;
 }
 
+export interface ApiProbeInfo {
+  mac_address: string;
+  vendor: string | null;
+  known_ssids: string[];
+  latest_rssi: number | null;
+  is_nearby_only: boolean;
+}
+
 // ── Core fetch helper ──────────────────────────────────────────────────────
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`API ${res.status}: ${body}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(`${BASE_URL}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      ...options,
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`API ${res.status}: ${body}`);
+    }
+    return res.json() as Promise<T>;
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json() as Promise<T>;
 }
 
 // ── API ────────────────────────────────────────────────────────────────────
@@ -76,8 +91,16 @@ export const api = {
   deleteDevice: (mac: string) =>
     request<ApiMessage>(`/devices/${encodeURIComponent(mac)}`, { method: 'DELETE' }),
 
-  // TEMPORARY: calls direct ARP scan endpoint. Replace with runMonitoringCycle once Raspberry Pi is integrated.
   scanNetwork: () => request<ApiDevice[]>('/scan', { method: 'POST' }),
+
+  getDeviceProbeInfo: (mac: string) =>
+    request<ApiProbeInfo>(`/probe-info/${encodeURIComponent(mac)}`),
+
+  // Wifi Probing
+  startWifiProbing: () => request<ApiMessage>('/wifi_probing/start', { method: 'POST' }),
+  stopWifiProbing: () => request<ApiMessage>('/wifi_probing/stop', { method: 'POST' }),
+  getWifiProbingStatus: () => request<{ running: boolean; interface: string | null }>('/wifi_probing/status'),
+  getWifiProbingDevices: () => request<ApiDevice[]>('/wifi_probing/devices'),
 
   // Events
   getEvents: (limit = 50) => request<ApiEvent[]>(`/events?limit=${limit}`),

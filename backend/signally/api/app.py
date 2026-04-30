@@ -34,11 +34,16 @@ from signally.api.schemas import (
     DeviceResponse,
     EventResponse,
     MessageResponse,
+    ProbeInfoResponse,
     SetCsiPresenceRequest,
     WifiProbingStartRequest,
     WifiProbingStatusResponse,
     SystemStateResponse,
     MonitoringCycleResponse
+)
+from signally.config import (
+    EVENT_WIFI_PROBE_DEVICE_DISCOVERED_NEW,
+    EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN,
 )
 
 
@@ -111,7 +116,7 @@ def on_startup() -> None:
     
     # 2. Auto-Fallback for Layer 2 (Wi-Fi Probing)
     # This is the name we expect the Wavlink to have once in monitor mode
-    EXPECTED_WIFI_INTERFACE = "wlan1mon" 
+    EXPECTED_WIFI_INTERFACE = "wlx803f5d168019"
     
     try:
         # VALIDATION STEP: Check if the interface is actually plugged in
@@ -264,6 +269,67 @@ def reset_database_content():
                 result["deleted_devices"],
                 result["deleted_events"],
             )
+        )
+    finally:
+        session.close()
+
+
+def _get_vendor(mac_address: str) -> Optional[str]:
+    try:
+        from scapy.all import conf
+        vendor = conf.manufdb.getManufLong(mac_address)
+        return vendor if vendor else None
+    except Exception:
+        return None
+
+
+def _parse_probe_details(details: str) -> dict:
+    result = {}
+    for part in details.split('; '):
+        if '=' in part:
+            key, _, value = part.partition('=')
+            result[key.strip()] = value.strip()
+    return result
+
+
+@app.get("/probe-info/{mac_address}", response_model=ProbeInfoResponse)
+def get_device_probe_info(mac_address: str):
+    session = get_db_session()
+    try:
+        from signally.services.event_service import EventService
+        event_service = EventService(session)
+        events = event_service.list_events_for_device_by_types(
+            device_mac=mac_address,
+            event_types=[EVENT_WIFI_PROBE_DEVICE_DISCOVERED_NEW, EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN],
+            limit=200,
+        )
+
+        seen_ssids: list[str] = []
+        latest_rssi: Optional[int] = None
+
+        for event in events:
+            parsed = _parse_probe_details(event.details)
+            ssid = parsed.get('ssid', '').strip()
+            if ssid and ssid not in seen_ssids:
+                seen_ssids.append(ssid)
+            if latest_rssi is None:
+                raw_rssi = parsed.get('rssi', '').strip()
+                if raw_rssi:
+                    try:
+                        latest_rssi = int(raw_rssi)
+                    except ValueError:
+                        pass
+
+        services = build_services(session)
+        device = services["device_service"].get_by_mac(mac_address)
+        is_nearby_only = device is None or not device.ip_address or device.ip_address == 'UNASSOCIATED'
+
+        return ProbeInfoResponse(
+            mac_address=mac_address.upper(),
+            vendor=_get_vendor(mac_address),
+            known_ssids=seen_ssids,
+            latest_rssi=latest_rssi,
+            is_nearby_only=is_nearby_only,
         )
     finally:
         session.close()

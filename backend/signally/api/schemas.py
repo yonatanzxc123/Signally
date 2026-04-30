@@ -56,6 +56,14 @@ class MonitoringCycleResponse(BaseModel):
     blocked_devices_count: int
 
 
+class ProbeInfoResponse(BaseModel):
+    mac_address: str
+    vendor: Optional[str] = None
+    known_ssids: list[str]
+    latest_rssi: Optional[int] = None
+    is_nearby_only: bool
+
+
 class WifiProbingStartRequest(BaseModel):
     interface: Optional[str] = None
     mock_mode: bool = False

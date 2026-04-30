@@ -20,7 +20,7 @@ const FILTERS: { key: Filter; label: string; icon: keyof typeof Ionicons.glyphMa
   { key: 'unknown_detected', label: 'Alerts', icon: 'warning' },
   { key: 'device_approved', label: 'Approved', icon: 'checkmark-circle' },
   { key: 'device_blocked', label: 'Blocked', icon: 'ban' },
-  { key: 'scan_complete', label: 'Scans', icon: 'scan' },
+  { key: 'system', label: 'System', icon: 'shield-checkmark-outline' },
 ];
 
 export default function LogsScreen() {
