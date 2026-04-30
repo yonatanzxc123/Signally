@@ -13,6 +13,7 @@ from signally.config import (
     EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN,
     EVENT_WIFI_PROBING_ERROR,
     WIFI_PROBING_RECENT_EVENT_LIMIT,
+    WIFI_PROBING_STRONG_RSSI_MIN,
     EVENT_WIFI_PROBING_STARTED,
     EVENT_WIFI_PROBING_STOPPED,
     NETWORK_SSID,
@@ -37,6 +38,8 @@ class WifiProbingService:
 
     def handle_detection(self, detection: WifiProbeDetection) -> "Device | None":
         if NETWORK_SSID and detection.ssid != NETWORK_SSID:
+            return None
+        if not self._has_strong_signal(detection):
             return None
 
         # Deduplicate by SSID within 60-second window to handle MAC randomization
@@ -113,6 +116,9 @@ class WifiProbingService:
             event_type=EVENT_WIFI_PROBING_ERROR,
             details="interface={0}; error={1}".format(interface or "None", error_message),
         )
+
+    def _has_strong_signal(self, detection: WifiProbeDetection) -> bool:
+        return detection.rssi is not None and detection.rssi >= WIFI_PROBING_STRONG_RSSI_MIN
 
     def _build_details(self, detection: WifiProbeDetection) -> str:
         return (

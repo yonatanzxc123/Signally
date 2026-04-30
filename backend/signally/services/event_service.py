@@ -4,12 +4,13 @@ Service for writing and reading events.
 
 from typing import List, Optional, Sequence
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy import and_, desc, func, select
 from sqlalchemy.orm import Session
 
 from signally.models.event import Event
+from signally.utils.time_utils import utc_now
 
 
 class EventService:
@@ -46,7 +47,7 @@ class EventService:
         event_types: Sequence[str],
         window_seconds: int = 60,
     ) -> Optional[Event]:
-        since = datetime.utcnow() - timedelta(seconds=window_seconds)
+        since = utc_now() - timedelta(seconds=window_seconds)
         stmt = (
             select(Event)
             .where(
