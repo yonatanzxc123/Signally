@@ -14,6 +14,7 @@ const EventsContext = createContext<EventsContextValue | null>(null);
 
 const EVENT_TYPE_MAP: Record<string, EventType> = {
   DEVICE_DISCOVERED_NEW: 'unknown_detected',
+  WIFI_PROBE_DEVICE_DISCOVERED_NEW: 'unknown_detected',
   DEVICE_APPROVED: 'device_approved',
   DEVICE_BLOCKED: 'device_blocked',
   APPROVED_USER_PRESENT: 'system',
@@ -24,6 +25,7 @@ const EVENT_TYPE_MAP: Record<string, EventType> = {
 
 const EVENT_MESSAGE_MAP: Record<string, string> = {
   DEVICE_DISCOVERED_NEW: 'New device on network',
+  WIFI_PROBE_DEVICE_DISCOVERED_NEW: 'Strong nearby device detected',
   DEVICE_APPROVED: 'Device approved',
   DEVICE_BLOCKED: 'Device blocked',
   APPROVED_USER_PRESENT: 'Authorized user identified',
