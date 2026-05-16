@@ -1,6 +1,6 @@
 import React, { createContext, useContext } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, ApiDevice } from '../api/client';
+import { api, ApiDevice, ApiSystemState } from '../api/client';
 import { Device, DeviceStatus, formatTimestamp } from '../types';
 import { useAuth } from './AuthContext';
 
@@ -63,9 +63,36 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     retry: false,
   });
 
+  function applyDeviceStatus(devices: ApiDevice[] | undefined, mac: string, newStatus: ApiDevice['status']) {
+    return devices?.map((d) => d.mac_address === mac ? { ...d, status: newStatus } : d) ?? [];
+  }
+
+  function applyDeviceStatusToSystemState(
+    state: ApiSystemState | undefined,
+    mac: string,
+    newStatus: ApiDevice['status'],
+  ) {
+    if (!state) return state;
+    return {
+      ...state,
+      present_devices: applyDeviceStatus(state.present_devices, mac, newStatus),
+      current_unknown_devices:
+        newStatus === 'PENDING'
+          ? state.current_unknown_devices
+          : state.current_unknown_devices.filter((d) => d.mac_address !== mac),
+      current_intruder_count:
+        newStatus === 'PENDING'
+          ? state.current_intruder_count
+          : Math.max(0, state.current_intruder_count - 1),
+    };
+  }
+
   function optimisticallyUpdateStatus(mac: string, newStatus: ApiDevice['status']) {
     queryClient.setQueryData<ApiDevice[]>(['devices'], (old) =>
-      old?.map((d) => d.mac_address === mac ? { ...d, status: newStatus } : d) ?? []
+      applyDeviceStatus(old, mac, newStatus)
+    );
+    queryClient.setQueryData<ApiSystemState>(['system-state'], (old) =>
+      applyDeviceStatusToSystemState(old, mac, newStatus)
     );
   }
 
@@ -73,21 +100,68 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     queryClient.setQueryData<ApiDevice[]>(['devices'], (old) =>
       old?.map((d) => d.mac_address === updated.mac_address ? { ...d, status: updated.status } : d) ?? []
     );
+    queryClient.setQueryData<ApiSystemState>(['system-state'], (old) =>
+      applyDeviceStatusToSystemState(old, updated.mac_address, updated.status)
+    );
+  }
+
+  function restoreOptimisticSnapshot(snapshot?: {
+    devices?: ApiDevice[];
+    systemState?: ApiSystemState;
+  }) {
+    queryClient.setQueryData(['devices'], snapshot?.devices);
+    queryClient.setQueryData(['system-state'], snapshot?.systemState);
   }
 
   const approveMutation = useMutation({
     mutationFn: (mac: string) => api.approveDevice(mac, role),
-    onMutate: (mac) => optimisticallyUpdateStatus(mac, 'AUTHORIZED'),
+    onMutate: async (mac) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['devices'] }),
+        queryClient.cancelQueries({ queryKey: ['system-state'] }),
+      ]);
+      const snapshot = {
+        devices: queryClient.getQueryData<ApiDevice[]>(['devices']),
+        systemState: queryClient.getQueryData<ApiSystemState>(['system-state']),
+      };
+      optimisticallyUpdateStatus(mac, 'AUTHORIZED');
+      return snapshot;
+    },
     onSuccess: (updated) => patchDeviceInCache(updated),
-    onError: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
+    onError: (_error, _mac, snapshot) => restoreOptimisticSnapshot(snapshot),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      queryClient.invalidateQueries({ queryKey: ['system-state'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+    },
   });
 
   const approveAllMutation = useMutation({
     mutationFn: () => api.approveAllPendingDevices(role),
-    onMutate: () => {
+    onMutate: async () => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['devices'] }),
+        queryClient.cancelQueries({ queryKey: ['system-state'] }),
+      ]);
+      const snapshot = {
+        devices: queryClient.getQueryData<ApiDevice[]>(['devices']),
+        systemState: queryClient.getQueryData<ApiSystemState>(['system-state']),
+      };
       queryClient.setQueryData<ApiDevice[]>(['devices'], (old) =>
         old?.map((d) => d.status === 'PENDING' ? { ...d, status: 'AUTHORIZED' } : d) ?? []
       );
+      queryClient.setQueryData<ApiSystemState>(['system-state'], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          present_devices: old.present_devices.map((d) =>
+            d.status === 'PENDING' ? { ...d, status: 'AUTHORIZED' } : d
+          ),
+          current_unknown_devices: [],
+          current_intruder_count: 0,
+        };
+      });
+      return snapshot;
     },
     onSuccess: (updated) => {
       queryClient.setQueryData<ApiDevice[]>(['devices'], (old) => {
@@ -95,14 +169,35 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
         return old?.map((d) => updates.get(d.mac_address) ?? d) ?? updated;
       });
     },
-    onError: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
+    onError: (_error, _variables, snapshot) => restoreOptimisticSnapshot(snapshot),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      queryClient.invalidateQueries({ queryKey: ['system-state'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+    },
   });
 
   const blockMutation = useMutation({
     mutationFn: (mac: string) => api.blockDevice(mac, role),
-    onMutate: (mac) => optimisticallyUpdateStatus(mac, 'BLOCKED'),
+    onMutate: async (mac) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ['devices'] }),
+        queryClient.cancelQueries({ queryKey: ['system-state'] }),
+      ]);
+      const snapshot = {
+        devices: queryClient.getQueryData<ApiDevice[]>(['devices']),
+        systemState: queryClient.getQueryData<ApiSystemState>(['system-state']),
+      };
+      optimisticallyUpdateStatus(mac, 'BLOCKED');
+      return snapshot;
+    },
     onSuccess: (updated) => patchDeviceInCache(updated),
-    onError: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
+    onError: (_error, _mac, snapshot) => restoreOptimisticSnapshot(snapshot),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      queryClient.invalidateQueries({ queryKey: ['system-state'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+    },
   });
 
   const devices = (data ?? []).map(mapDevice);

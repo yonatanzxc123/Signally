@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   View,
   Text,
   ScrollView,
@@ -18,7 +19,7 @@ import { colors, spacing, radius, font } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { useDevices } from '../context/DevicesContext';
 import { useEvents } from '../context/EventsContext';
-import { api } from '../api/client';
+import { api, ApiSecurityMode, ApiSystemState } from '../api/client';
 
 export default function HomeScreen() {
   const { logout, role } = useAuth();
@@ -26,6 +27,8 @@ export default function HomeScreen() {
   const { events } = useEvents();
   const queryClient = useQueryClient();
   const [menuVisible, setMenuVisible] = useState(false);
+  const [modeControlWidth, setModeControlWidth] = useState(0);
+  const modeAnim = useRef(new Animated.Value(0)).current;
 
   const scanMutation = useMutation({
     mutationFn: api.runMonitoringCycle,
@@ -37,10 +40,45 @@ export default function HomeScreen() {
   });
 
   const securityModeMutation = useMutation({
-    mutationFn: (mode: 'HOME' | 'AWAY') => api.setSecurityMode(mode, role),
-    onSuccess: () => {
+    mutationFn: (mode: ApiSecurityMode) => api.setSecurityMode(mode, role),
+    onMutate: async (mode) => {
+      await queryClient.cancelQueries({ queryKey: ['system-state'] });
+      const snapshot = queryClient.getQueryData<ApiSystemState>(['system-state']);
+      const now = new Date().toISOString();
+      queryClient.setQueryData<ApiSystemState>(['system-state'], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          security_mode: mode,
+          security_mode_updated_by_role: role,
+          security_mode_updated_at: now,
+          decision:
+            mode === 'HOME' && old.decision === 'ALERT'
+              ? 'HOME_REVIEW'
+              : old.decision,
+          reason:
+            mode === 'HOME' && old.decision === 'ALERT'
+              ? 'Home mode is active. Unknown activity is queued for review.'
+              : old.reason,
+        };
+      });
+      return snapshot;
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<ApiSystemState>(['system-state'], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          security_mode: updated.mode,
+          security_mode_updated_by_role: updated.updated_by_role,
+          security_mode_updated_at: updated.updated_at,
+        };
+      });
       queryClient.invalidateQueries({ queryKey: ['system-state'] });
       queryClient.invalidateQueries({ queryKey: ['events'] });
+    },
+    onError: (_error, _mode, snapshot) => {
+      queryClient.setQueryData(['system-state'], snapshot);
     },
   });
 
@@ -60,6 +98,25 @@ export default function HomeScreen() {
   const scanning = scanMutation.isPending;
   const securityMode = systemState?.security_mode ?? 'HOME';
   const canChangeSecurityMode = role === 'ADMIN' || role === 'FAMILY';
+  const modeSegmentWidth = modeControlWidth > 0 ? (modeControlWidth - 8) / 2 : 0;
+
+  useEffect(() => {
+    Animated.timing(modeAnim, {
+      toValue: securityMode === 'AWAY' ? 1 : 0,
+      duration: 260,
+      useNativeDriver: false,
+    }).start();
+  }, [modeAnim, securityMode]);
+
+  const modeSliderTranslate = modeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, modeSegmentWidth],
+  });
+
+  const modeSliderColor = modeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [colors.accent, colors.secure],
+  });
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -144,7 +201,23 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          <View style={styles.modeControls}>
+          <View
+            style={styles.modeControls}
+            onLayout={(e) => setModeControlWidth(e.nativeEvent.layout.width)}
+          >
+            {modeSegmentWidth > 0 && (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.modeSlider,
+                  {
+                    width: modeSegmentWidth,
+                    backgroundColor: modeSliderColor,
+                    transform: [{ translateX: modeSliderTranslate }],
+                  },
+                ]}
+              />
+            )}
             {(['HOME', 'AWAY'] as const).map((mode) => {
               const active = securityMode === mode;
               return (
@@ -152,8 +225,6 @@ export default function HomeScreen() {
                   key={mode}
                   style={[
                     styles.modeButton,
-                    active && styles.modeButtonActive,
-                    mode === 'AWAY' && active && styles.modeButtonAwayActive,
                     !canChangeSecurityMode && styles.modeButtonDisabled,
                   ]}
                   disabled={!canChangeSecurityMode || active || securityModeMutation.isPending}
@@ -348,27 +419,36 @@ const styles = StyleSheet.create({
   },
   modeControls: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    position: 'relative',
+    minHeight: 48,
+    borderRadius: radius.sm,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 4,
+    overflow: 'hidden',
+  },
+  modeSlider: {
+    position: 'absolute',
+    top: 4,
+    bottom: 4,
+    left: 4,
+    borderRadius: radius.sm - 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   modeButton: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
     borderRadius: radius.sm,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  modeButtonActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  modeButtonAwayActive: {
-    backgroundColor: colors.secure,
-    borderColor: colors.secure,
+    zIndex: 1,
   },
   modeButtonDisabled: {
     opacity: 0.5,
