@@ -9,6 +9,7 @@ const BASE_URL =
 
 export type BackendDeviceStatus = 'PENDING' | 'AUTHORIZED' | 'BLOCKED';
 export type ApiUserRole = 'ADMIN' | 'FAMILY' | 'GUEST';
+export type ApiSecurityMode = 'HOME' | 'AWAY';
 
 export interface ApiDeviceFingerprint {
   device_category: string;
@@ -53,6 +54,9 @@ export interface ApiEvent {
 }
 
 export interface ApiSystemState {
+  security_mode: ApiSecurityMode;
+  security_mode_updated_by_role: ApiUserRole | 'SYSTEM' | null;
+  security_mode_updated_at: string | null;
   csi_presence_detected: boolean;
   approved_user_present: boolean;
   admin_present: boolean;
@@ -69,6 +73,7 @@ export interface ApiSystemState {
 }
 
 export interface ApiMonitoringCycle {
+  security_mode: ApiSecurityMode;
   csi_presence_detected: boolean;
   approved_user_present: boolean;
   admin_present: boolean;
@@ -89,6 +94,13 @@ export interface ApiMonitoringCycle {
 
 export interface ApiMessage {
   message: string;
+}
+
+export interface ApiSecurityModeState {
+  mode: ApiSecurityMode;
+  armed: boolean;
+  updated_by_role: ApiUserRole | 'SYSTEM';
+  updated_at: string;
 }
 
 export interface ApiProbeInfo {
@@ -173,6 +185,13 @@ export const api = {
   getEvents: (limit = 50) => request<ApiEvent[]>(`/events?limit=${limit}`),
 
   // System
+  getSecurityMode: () => request<ApiSecurityModeState>('/security-mode'),
+  setSecurityMode: (mode: ApiSecurityMode, role: ApiUserRole = 'ADMIN') =>
+    request<ApiSecurityModeState>('/security-mode', {
+      method: 'POST',
+      headers: roleHeaders(role),
+      body: JSON.stringify({ mode }),
+    }),
   getSystemState: () => request<ApiSystemState>('/system/state'),
   runMonitoringCycle: () =>
     request<ApiMonitoringCycle>('/monitoring/run-cycle', { method: 'POST' }),

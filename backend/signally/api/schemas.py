@@ -64,6 +64,9 @@ class CsiPresenceResponse(BaseModel):
 
 
 class SystemStateResponse(BaseModel):
+    security_mode: str = "HOME"
+    security_mode_updated_by_role: Optional[str] = None
+    security_mode_updated_at: Optional[datetime] = None
     csi_presence_detected: bool
     approved_user_present: bool
     admin_present: bool = False
@@ -79,6 +82,7 @@ class SystemStateResponse(BaseModel):
     notification_audience: list[str] = []
 
 class MonitoringCycleResponse(BaseModel):
+    security_mode: str = "HOME"
     csi_presence_detected: bool
     approved_user_present: bool
     admin_present: bool = False
@@ -117,6 +121,21 @@ class AssignDeviceRequest(BaseModel):
 class ApproveDeviceRequest(BaseModel):
     owner_name: Optional[str] = None
     owner_role: str = "GUEST"
+
+
+class SetDeviceHostnameHintRequest(BaseModel):
+    hostname: str
+
+
+class SecurityModeResponse(BaseModel):
+    mode: str
+    armed: bool
+    updated_by_role: str
+    updated_at: datetime
+
+
+class SetSecurityModeRequest(BaseModel):
+    mode: str
 
 
 class ProbeInfoResponse(BaseModel):

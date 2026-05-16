@@ -40,6 +40,8 @@ from signally.api.schemas import (
     MessageResponse,
     ProbeInfoResponse,
     SetCsiPresenceRequest,
+    SetSecurityModeRequest,
+    SecurityModeResponse,
     WifiProbingStartRequest,
     WifiProbingStatusResponse,
     SystemStateResponse,
@@ -48,9 +50,11 @@ from signally.api.schemas import (
     UserResponse,
 )
 from signally.config import (
+    EVENT_SECURITY_MODE_CHANGED,
     EVENT_WIFI_PROBE_DEVICE_DISCOVERED_NEW,
     EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN,
 )
+from signally.models.security_mode import SecurityMode
 from signally.models.user import UserRole
 from signally.services.connected_inspection_service import ConnectedInspectionService
 from signally.services.fingerprint_service import FingerprintService
@@ -76,12 +80,14 @@ def run_background_monitor():
                 connected_presence=connected_presence,
                 limit=50,
             )
+            security_state = services["security_mode_service"].get_state()
             
             context = CorrelationContext(
                 csi_presence_detected=csi_detected,
                 nearby_device_count=len(nearby_presence.nearby_devices),
                 connected_presence=connected_presence,
                 nearby_presence=nearby_presence,
+                security_mode=security_state.mode,
             )
             
             decision = services["correlation_service"].evaluate(context)
@@ -158,6 +164,13 @@ def to_fingerprint_response(fingerprint) -> DeviceFingerprintResponse:
     )
 
 
+def to_security_mode_response(state) -> SecurityModeResponse:
+    mode = state.mode.value if hasattr(state.mode, "value") else str(state.mode)
+    return SecurityModeResponse(
+        mode=mode,
+        armed=mode == SecurityMode.AWAY.value,
+        updated_by_role=state.updated_by_role,
+        updated_at=state.updated_at,
 def to_connected_inspection_response(result) -> ConnectedInspectionResponse:
     return ConnectedInspectionResponse(
         device_category=result.device_category,
@@ -219,6 +232,47 @@ def on_startup() -> None:
 @app.get("/health", response_model=MessageResponse)
 def health() -> MessageResponse:
     return MessageResponse(message="Signally API is running.")
+
+
+@app.get("/security-mode", response_model=SecurityModeResponse)
+def get_security_mode():
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        return to_security_mode_response(services["security_mode_service"].get_state())
+    finally:
+        session.close()
+
+
+@app.post("/security-mode", response_model=SecurityModeResponse)
+def set_security_mode(
+    request: SetSecurityModeRequest,
+    x_signally_user_role: Optional[str] = Header(default=None),
+):
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        actor_role = parse_actor_role(x_signally_user_role)
+        try:
+            state = services["security_mode_service"].set_mode(
+                mode=request.mode,
+                actor_role=actor_role,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        services["event_service"].log_event(
+            event_type=EVENT_SECURITY_MODE_CHANGED,
+            details="Security mode set to {0} by {1}".format(
+                state.mode.value if hasattr(state.mode, "value") else str(state.mode),
+                actor_role.value,
+            ),
+        )
+        return to_security_mode_response(state)
+    finally:
+        session.close()
 
 
 @app.post("/scan", response_model=list[DeviceResponse])
@@ -683,17 +737,22 @@ def get_system_state():
             connected_presence=connected_presence,
             limit=50,
         )
+        security_state = services["security_mode_service"].get_state()
         
         context = CorrelationContext(
             csi_presence_detected=csi_detected,
             nearby_device_count=len(nearby_presence.nearby_devices),
             connected_presence=connected_presence,
             nearby_presence=nearby_presence,
+            security_mode=security_state.mode,
         )
         
         decision = services["correlation_service"].evaluate(context)
         
         return SystemStateResponse(
+            security_mode=security_state.mode.value,
+            security_mode_updated_by_role=security_state.updated_by_role,
+            security_mode_updated_at=security_state.updated_at,
             csi_presence_detected=csi_detected,
             approved_user_present=connected_presence.approved_user_present,
             admin_present=connected_presence.admin_present,
@@ -741,16 +800,19 @@ def run_monitoring_cycle():
             connected_presence=connected_presence,
             limit=50,
         )
+        security_state = services["security_mode_service"].get_state()
         
         context = CorrelationContext(
             csi_presence_detected=csi_detected,
             nearby_device_count=len(nearby_presence.nearby_devices),
             connected_presence=connected_presence,
             nearby_presence=nearby_presence,
+            security_mode=security_state.mode,
         )
         decision = services["correlation_service"].evaluate(context)
         
         return MonitoringCycleResponse(
+            security_mode=security_state.mode.value,
             csi_presence_detected=csi_detected,
             approved_user_present=connected_presence.approved_user_present,
             admin_present=connected_presence.admin_present,

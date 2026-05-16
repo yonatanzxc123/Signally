@@ -5,6 +5,7 @@ Admin manager.
 from __future__ import annotations
 
 from signally.models.device import Device, DeviceStatus
+from signally.models.security_mode import SecurityMode, SecurityState
 from signally.models.user import UserRole
 from signally.services.device_service import DeviceService
 from signally.services.event_service import EventService
@@ -114,6 +115,13 @@ class AdminManager:
         for event in events:
             self.event_service.session.delete(event)
         self.event_service.session.commit()
+
+        security_state = self.device_service.session.get(SecurityState, 1)
+        if security_state is not None:
+            security_state.mode = SecurityMode.HOME
+            security_state.updated_by_role = "SYSTEM"
+            security_state.updated_at = utc_now()
+            self.device_service.session.commit()
 
         return {
             "deleted_devices": deleted_devices,
