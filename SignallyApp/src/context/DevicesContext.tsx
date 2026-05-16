@@ -31,7 +31,6 @@ function mapDevice(d: ApiDevice): Device {
     ip: d.ip_address,
     status: statusMap[d.status] ?? 'unknown',
     lastSeen: formatTimestamp(new Date(d.last_seen)),
-    vendor: d.fingerprint?.manufacturer ?? 'Unknown',
     category,
     confidence: d.fingerprint?.confidence ?? 0,
     randomizedMac: d.fingerprint?.randomized_mac ?? false,

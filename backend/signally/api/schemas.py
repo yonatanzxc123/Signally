@@ -9,7 +9,6 @@ from pydantic import BaseModel
 
 
 class DeviceFingerprintResponse(BaseModel):
-    manufacturer: Optional[str] = None
     device_category: str
     display_name: str
     confidence: float
@@ -17,6 +16,17 @@ class DeviceFingerprintResponse(BaseModel):
     randomized_mac: bool = False
     primary_layer: str = "UNKNOWN"
     connected: bool = False
+    signals: list[str]
+
+
+class ConnectedInspectionResponse(BaseModel):
+    device_category: str
+    confidence: float
+    hostname: Optional[str] = None
+    mdns_services: list[str]
+    nmap_device_type: Optional[str] = None
+    nmap_os: Optional[str] = None
+    open_ports: list[str]
     signals: list[str]
 
 
@@ -130,7 +140,6 @@ class SetSecurityModeRequest(BaseModel):
 
 class ProbeInfoResponse(BaseModel):
     mac_address: str
-    vendor: Optional[str] = None
     known_ssids: list[str]
     latest_rssi: Optional[int] = None
     is_nearby_only: bool

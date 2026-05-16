@@ -3,6 +3,7 @@ from sqlalchemy.orm import sessionmaker
 
 from signally.db.base import Base
 from signally.models.device import Device
+from signally.services.connected_inspection_service import ConnectedInspectionResult
 from signally.services.event_service import EventService
 from signally.services.fingerprint_service import FingerprintService
 
@@ -47,35 +48,48 @@ def test_probe_only_device_has_weaker_primary_layer():
     assert "ARP_CONNECTED" not in fingerprint.signals
 
 
-def test_hostname_can_infer_iphone(monkeypatch):
+def test_cached_inspection_hostname_can_infer_phone(monkeypatch):
     session = build_session()
     device = add_device(session)
     service = FingerprintService(session)
-    monkeypatch.setattr(service, "_get_vendor", lambda _: None)
-    monkeypatch.setattr(service, "_get_hostname", lambda _: "Yoni-iPhone")
+    monkeypatch.setattr(
+        service.inspection_service,
+        "get_latest_result",
+        lambda _: ConnectedInspectionResult(
+            hostname="Yoni-iPhone",
+            signals=["MDNS"],
+        ),
+    )
 
     fingerprint = service.fingerprint_device(device)
 
     assert fingerprint.device_category == "PHONE"
-    assert fingerprint.manufacturer == "Apple"
     assert fingerprint.display_name == "Yoni-iPhone"
     assert "HOSTNAME" in fingerprint.signals
     assert fingerprint.confidence >= 0.8
 
 
-def test_vendor_can_infer_smart_tv(monkeypatch):
+def test_cached_connected_inspection_can_infer_smart_tv(monkeypatch):
     session = build_session()
     device = add_device(session)
     service = FingerprintService(session)
-    monkeypatch.setattr(service, "_get_vendor", lambda _: "Roku Inc.")
-    monkeypatch.setattr(service, "_get_hostname", lambda _: None)
+    monkeypatch.setattr(
+        service.inspection_service,
+        "get_latest_result",
+        lambda _: ConnectedInspectionResult(
+            device_category="TV",
+            confidence=0.85,
+            hostname="Living-Room-TV",
+            mdns_services=["_googlecast._tcp"],
+            signals=["MDNS"],
+        ),
+    )
 
     fingerprint = service.fingerprint_device(device)
 
     assert fingerprint.device_category == "TV"
-    assert fingerprint.manufacturer == "Roku"
-    assert fingerprint.display_name == "Tv"
-    assert "MAC_VENDOR" in fingerprint.signals
+    assert fingerprint.display_name == "Living-Room-TV"
+    assert "MDNS" in fingerprint.signals
 
 
 def test_probe_ssids_hint_phone_when_other_signals_missing(monkeypatch):
@@ -87,8 +101,6 @@ def test_probe_ssids_hint_phone_when_other_signals_missing(monkeypatch):
         device_mac=device.mac_address,
     )
     service = FingerprintService(session)
-    monkeypatch.setattr(service, "_get_vendor", lambda _: None)
-    monkeypatch.setattr(service, "_get_hostname", lambda _: None)
 
     fingerprint = service.fingerprint_device(device)
 
@@ -98,38 +110,23 @@ def test_probe_ssids_hint_phone_when_other_signals_missing(monkeypatch):
     assert "WIFI_PROBE_SSIDS" in fingerprint.signals
 
 
-def test_offline_oui_fallback_infers_observed_samsung_phone(monkeypatch):
-    session = build_session()
-    device = add_device(
-        session,
-        mac_address="38:8A:06:9A:3B:3C",
-        ip_address="10.100.102.21",
-    )
-    service = FingerprintService(session)
-    monkeypatch.setattr(service, "_get_hostname", lambda _: None)
-
-    fingerprint = service.fingerprint_device(device)
-
-    assert fingerprint.manufacturer == "Samsung"
-    assert fingerprint.device_category == "PHONE"
-    assert fingerprint.display_name == "Phone"
-    assert "MAC_VENDOR" in fingerprint.signals
-
-
-def test_hostname_hint_overrides_missing_reverse_dns(monkeypatch):
+def test_cached_inspection_hostname_can_infer_tv(monkeypatch):
     session = build_session()
     device = add_device(session)
     service = FingerprintService(session)
-    monkeypatch.setattr(service, "_get_vendor", lambda _: None)
-    monkeypatch.setattr(service, "_get_hostname", lambda _: None)
-
-    service.set_hostname_hint(device.mac_address, "Kitchen-Samsung-TV")
+    monkeypatch.setattr(
+        service.inspection_service,
+        "get_latest_result",
+        lambda _: ConnectedInspectionResult(
+            hostname="Kitchen-Samsung-TV",
+            signals=["MDNS"],
+        ),
+    )
     fingerprint = service.fingerprint_device(device)
 
     assert fingerprint.device_category == "TV"
-    assert fingerprint.manufacturer == "Samsung"
     assert fingerprint.hostname == "Kitchen-Samsung-TV"
-    assert "HOSTNAME_HINT" in fingerprint.signals
+    assert "HOSTNAME" in fingerprint.signals
 
 
 def test_randomized_mac_is_flagged_and_oui_is_not_trusted(monkeypatch):
@@ -140,12 +137,10 @@ def test_randomized_mac_is_flagged_and_oui_is_not_trusted(monkeypatch):
         ip_address="10.100.102.21",
     )
     service = FingerprintService(session)
-    monkeypatch.setattr(service, "_get_hostname", lambda _: None)
 
     fingerprint = service.fingerprint_device(device)
 
     assert fingerprint.randomized_mac is True
-    assert fingerprint.manufacturer is None
     assert fingerprint.device_category == "UNKNOWN"
     assert fingerprint.display_name == "Randomized MAC Device"
     assert "RANDOMIZED_MAC" in fingerprint.signals

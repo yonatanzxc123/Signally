@@ -12,7 +12,6 @@ export type ApiUserRole = 'ADMIN' | 'FAMILY' | 'GUEST';
 export type ApiSecurityMode = 'HOME' | 'AWAY';
 
 export interface ApiDeviceFingerprint {
-  manufacturer: string | null;
   device_category: string;
   display_name: string;
   confidence: number;
@@ -20,6 +19,17 @@ export interface ApiDeviceFingerprint {
   randomized_mac: boolean;
   primary_layer: string;
   connected: boolean;
+  signals: string[];
+}
+
+export interface ApiConnectedInspection {
+  device_category: string;
+  confidence: number;
+  hostname: string | null;
+  mdns_services: string[];
+  nmap_device_type: string | null;
+  nmap_os: string | null;
+  open_ports: string[];
   signals: string[];
 }
 
@@ -95,7 +105,6 @@ export interface ApiSecurityModeState {
 
 export interface ApiProbeInfo {
   mac_address: string;
-  vendor: string | null;
   known_ssids: string[];
   latest_rssi: number | null;
   is_nearby_only: boolean;
@@ -160,6 +169,11 @@ export const api = {
     request<ApiProbeInfo>(`/probe-info/${encodeURIComponent(mac)}`),
   getDeviceFingerprint: (mac: string) =>
     request<ApiDeviceFingerprint>(`/devices/${encodeURIComponent(mac)}/fingerprint`),
+  inspectDevice: (mac: string, role: ApiUserRole = 'ADMIN') =>
+    request<ApiConnectedInspection>(`/devices/${encodeURIComponent(mac)}/inspect`, {
+      method: 'POST',
+      headers: roleHeaders(role),
+    }),
 
   // Wifi Probing
   startWifiProbing: () => request<ApiMessage>('/wifi_probing/start', { method: 'POST' }),
