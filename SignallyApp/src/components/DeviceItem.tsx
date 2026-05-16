@@ -55,7 +55,7 @@ export default function DeviceItem({ device, onApprove, onBlock, onPress, canMan
         <View style={styles.info}>
           <Text style={styles.name}>{device.name}</Text>
           <Text style={styles.mac}>
-            {device.randomizedMac ? 'Randomized MAC' : device.category} · {device.mac}
+            {device.randomizedMac ? 'Randomized MAC' : device.name} · {device.mac}
           </Text>
           <View style={styles.metaRow}>
             <View style={[styles.connTag, device.ip ? styles.connTagConnected : styles.connTagNearby]}>

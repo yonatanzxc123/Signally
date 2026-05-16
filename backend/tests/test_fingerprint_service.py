@@ -74,7 +74,7 @@ def test_vendor_can_infer_smart_tv(monkeypatch):
 
     assert fingerprint.device_category == "TV"
     assert fingerprint.manufacturer == "Roku"
-    assert fingerprint.display_name == "Roku Tv"
+    assert fingerprint.display_name == "Tv"
     assert "MAC_VENDOR" in fingerprint.signals
 
 
@@ -112,7 +112,7 @@ def test_offline_oui_fallback_infers_observed_samsung_phone(monkeypatch):
 
     assert fingerprint.manufacturer == "Samsung"
     assert fingerprint.device_category == "PHONE"
-    assert fingerprint.display_name == "Samsung Phone"
+    assert fingerprint.display_name == "Phone"
     assert "MAC_VENDOR" in fingerprint.signals
 
 

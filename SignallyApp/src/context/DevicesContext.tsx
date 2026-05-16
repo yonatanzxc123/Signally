@@ -22,21 +22,33 @@ function mapDevice(d: ApiDevice): Device {
     AUTHORIZED: 'approved',
     BLOCKED: 'blocked',
   };
+  const category = d.fingerprint?.device_category ?? 'UNKNOWN';
   return {
     id: d.mac_address,
     mac: d.mac_address,
-    name: d.owner_name ?? d.fingerprint?.display_name ?? 'Unknown Device',
+    name: d.owner_name ?? formatDeviceType(category),
     ip: d.ip_address,
     status: statusMap[d.status] ?? 'unknown',
     lastSeen: formatTimestamp(new Date(d.last_seen)),
     vendor: d.fingerprint?.manufacturer ?? 'Unknown',
-    category: d.fingerprint?.device_category ?? 'UNKNOWN',
+    category,
     confidence: d.fingerprint?.confidence ?? 0,
     randomizedMac: d.fingerprint?.randomized_mac ?? false,
     primaryLayer: d.fingerprint?.primary_layer ?? (d.ip_address ? 'ARP' : 'PROBING'),
     connected: d.fingerprint?.connected ?? !!d.ip_address,
     fingerprintSignals: d.fingerprint?.signals ?? [],
   };
+}
+
+function formatDeviceType(category: string): string {
+  const labels: Record<string, string> = {
+    PHONE: 'Phone',
+    TV: 'Smart TV',
+    IOT: 'Smart Device',
+    COMPUTER: 'Computer',
+    UNKNOWN: 'Unknown Device',
+  };
+  return labels[category] ?? 'Unknown Device';
 }
 
 export function DevicesProvider({ children }: { children: React.ReactNode }) {

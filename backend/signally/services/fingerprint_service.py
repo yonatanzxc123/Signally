@@ -162,7 +162,6 @@ class FingerprintService:
             display_name = self._build_display_name(
                 owner=owner,
                 category=category,
-                manufacturer=manufacturer,
                 hostname=hostname,
             )
 
@@ -296,19 +295,14 @@ class FingerprintService:
         self,
         owner,
         category: str,
-        manufacturer: Optional[str],
         hostname: Optional[str],
     ) -> str:
         if owner is not None:
             return owner.display_name
         if hostname:
             return hostname
-        if manufacturer and category != "UNKNOWN":
-            return "{0} {1}".format(manufacturer, category.title())
         if category != "UNKNOWN":
             return category.title()
-        if manufacturer:
-            return "{0} Device".format(manufacturer)
         return "Unknown Device"
 
     def _parse_details(self, details: str) -> dict:
