@@ -32,6 +32,15 @@ export default function HomeScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] });
       queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['system-state'] });
+    },
+  });
+
+  const securityModeMutation = useMutation({
+    mutationFn: (mode: 'HOME' | 'AWAY') => api.setSecurityMode(mode, role),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-state'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
     },
   });
 
@@ -49,6 +58,8 @@ export default function HomeScreen() {
     (systemState?.notification_audience ?? []).includes(role);
   const recentEvents = events.slice(0, 5);
   const scanning = scanMutation.isPending;
+  const securityMode = systemState?.security_mode ?? 'HOME';
+  const canChangeSecurityMode = role === 'ADMIN' || role === 'FAMILY';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -95,7 +106,73 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        <StatusCard hasUnknown={shouldNotifyRole || (!systemState && hasUnknown)} deviceCount={devices.length} />
+        <StatusCard
+          hasUnknown={shouldNotifyRole || (!systemState && hasUnknown)}
+          deviceCount={devices.length}
+          securityMode={securityMode}
+        />
+
+        <View style={styles.modePanel}>
+          <View style={styles.modeHeader}>
+            <View style={styles.modeTitleWrap}>
+              <Text style={styles.modeTitle}>Security Mode</Text>
+              <Text style={styles.modeMeta}>
+                {securityMode === 'AWAY'
+                  ? 'Armed for unknown activity'
+                  : 'Relaxed for trusted presence'}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.modeBadge,
+                securityMode === 'AWAY' ? styles.modeBadgeAway : styles.modeBadgeHome,
+              ]}
+            >
+              <Ionicons
+                name={securityMode === 'AWAY' ? 'lock-closed-outline' : 'home-outline'}
+                size={14}
+                color={securityMode === 'AWAY' ? colors.secure : colors.accent}
+              />
+              <Text
+                style={[
+                  styles.modeBadgeText,
+                  { color: securityMode === 'AWAY' ? colors.secure : colors.accent },
+                ]}
+              >
+                {securityMode}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.modeControls}>
+            {(['HOME', 'AWAY'] as const).map((mode) => {
+              const active = securityMode === mode;
+              return (
+                <TouchableOpacity
+                  key={mode}
+                  style={[
+                    styles.modeButton,
+                    active && styles.modeButtonActive,
+                    mode === 'AWAY' && active && styles.modeButtonAwayActive,
+                    !canChangeSecurityMode && styles.modeButtonDisabled,
+                  ]}
+                  disabled={!canChangeSecurityMode || active || securityModeMutation.isPending}
+                  onPress={() => securityModeMutation.mutate(mode)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons
+                    name={mode === 'AWAY' ? 'shield-checkmark-outline' : 'home-outline'}
+                    size={16}
+                    color={active ? colors.surface : colors.textSecondary}
+                  />
+                  <Text style={[styles.modeButtonText, active && styles.modeButtonTextActive]}>
+                    {mode === 'AWAY' ? 'Away' : 'Home'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
 
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
@@ -219,6 +296,90 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.md,
     paddingBottom: spacing.xl,
+  },
+  modePanel: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  modeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  modeTitleWrap: {
+    flex: 1,
+  },
+  modeTitle: {
+    fontSize: font.lg,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  modeMeta: {
+    fontSize: font.sm,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  modeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+  },
+  modeBadgeHome: {
+    backgroundColor: '#DBEAFE',
+  },
+  modeBadgeAway: {
+    backgroundColor: colors.secureLight,
+  },
+  modeBadgeText: {
+    fontSize: font.sm,
+    fontWeight: '800',
+  },
+  modeControls: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  modeButton: {
+    flex: 1,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    borderRadius: radius.sm,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modeButtonActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  modeButtonAwayActive: {
+    backgroundColor: colors.secure,
+    borderColor: colors.secure,
+  },
+  modeButtonDisabled: {
+    opacity: 0.5,
+  },
+  modeButtonText: {
+    fontSize: font.md,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  modeButtonTextActive: {
+    color: colors.surface,
   },
   statsRow: {
     flexDirection: 'row',

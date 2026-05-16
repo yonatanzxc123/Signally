@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from signally.models.device import Device
+from signally.models.security_mode import SecurityMode
 
 
 @dataclass
@@ -57,6 +58,7 @@ class CorrelationContext:
     nearby_device_count: int
     connected_presence: ConnectedPresenceSnapshot
     nearby_presence: NearbyPresenceSnapshot = field(default_factory=NearbyPresenceSnapshot)
+    security_mode: SecurityMode = SecurityMode.HOME
 
 
 @dataclass
@@ -67,6 +69,7 @@ class CorrelationDecision:
     csi_presence_detected: bool
     nearby_device_count: int
     approved_user_present: bool
+    security_mode: SecurityMode = SecurityMode.HOME
     admin_present: bool = False
     family_present: bool = False
     guest_present: bool = False

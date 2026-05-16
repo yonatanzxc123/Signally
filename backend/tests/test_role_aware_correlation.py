@@ -8,6 +8,7 @@ from signally.admin.admin_manager import AdminManager
 from signally.db.base import Base
 from signally.models.device import Device
 from signally.models.correlation_models import CorrelationContext
+from signally.models.security_mode import SecurityMode
 from signally.models.user import DeviceOwner, User, UserRole
 from signally.network_scanner.dto import DiscoveredDevice
 from signally.services.correlation_service import CorrelationService
@@ -81,6 +82,7 @@ def test_intruder_enters_admin_review_before_family_alert():
             nearby_device_count=len(nearby_presence.nearby_devices),
             connected_presence=connected_presence,
             nearby_presence=nearby_presence,
+            security_mode=SecurityMode.AWAY,
         )
     )
 
@@ -115,12 +117,62 @@ def test_unresolved_intruder_escalates_to_family_after_review_window():
             nearby_device_count=len(nearby_presence.nearby_devices),
             connected_presence=connected_presence,
             nearby_presence=nearby_presence,
+            security_mode=SecurityMode.AWAY,
         )
     )
 
     assert decision.decision == "ALERT"
     assert decision.notification_audience == ["ADMIN", "FAMILY"]
     assert decision.admin_review_grace_active is False
+
+
+def test_home_mode_unknown_device_enters_review_without_loud_alert():
+    session = build_session()
+    device_service, _, admin_manager, presence_service = build_services(session)
+
+    scan_one(device_service, "AA:BB:CC:DD:EE:28", "192.168.1.28")
+    scan_one(device_service, "AA:BB:CC:DD:EE:29", "192.168.1.29")
+    admin_manager.approve_device(
+        "AA:BB:CC:DD:EE:28",
+        owner_name="Admin Phone",
+        owner_role=UserRole.ADMIN,
+    )
+
+    connected_presence = presence_service.get_presence_snapshot()
+    nearby_presence = WifiProbingService(session).get_presence_snapshot(connected_presence)
+    decision = CorrelationService().evaluate(
+        CorrelationContext(
+            csi_presence_detected=True,
+            nearby_device_count=len(nearby_presence.nearby_devices),
+            connected_presence=connected_presence,
+            nearby_presence=nearby_presence,
+            security_mode=SecurityMode.HOME,
+        )
+    )
+
+    assert decision.decision == "HOME_REVIEW"
+    assert decision.security_mode == SecurityMode.HOME
+    assert decision.notification_audience == ["ADMIN"]
+
+
+def test_home_mode_csi_without_recent_phone_is_occupied_not_intruder():
+    session = build_session()
+    _, _, _, presence_service = build_services(session)
+
+    connected_presence = presence_service.get_presence_snapshot()
+    nearby_presence = WifiProbingService(session).get_presence_snapshot(connected_presence)
+    decision = CorrelationService().evaluate(
+        CorrelationContext(
+            csi_presence_detected=True,
+            nearby_device_count=len(nearby_presence.nearby_devices),
+            connected_presence=connected_presence,
+            nearby_presence=nearby_presence,
+            security_mode=SecurityMode.HOME,
+        )
+    )
+
+    assert decision.decision == "HOME_OCCUPIED"
+    assert decision.notification_audience == []
 
 
 def test_authorized_arp_phone_suppresses_one_randomized_probe_duplicate(monkeypatch):
