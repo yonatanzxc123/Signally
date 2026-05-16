@@ -34,6 +34,8 @@ DEFAULT_SCAN_TIMEOUT = int(os.getenv("SIGNALLY_DEFAULT_SCAN_TIMEOUT", "2"))
 # Presence logic
 # A device is considered "currently present" if it was seen in the last X seconds.
 PRESENCE_WINDOW_SECONDS = int(os.getenv("SIGNALLY_PRESENCE_WINDOW_SECONDS", "30"))
+CURRENT_UNKNOWN_WINDOW_SECONDS = int(os.getenv("SIGNALLY_CURRENT_UNKNOWN_WINDOW_SECONDS", "30"))
+ADMIN_REVIEW_GRACE_SECONDS = int(os.getenv("SIGNALLY_ADMIN_REVIEW_GRACE_SECONDS", "30"))
 
 # Monitoring loop
 MONITOR_INTERVAL_SECONDS = int(os.getenv("SIGNALLY_MONITOR_INTERVAL_SECONDS", "10"))

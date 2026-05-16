@@ -25,7 +25,7 @@ const STATUS_CONFIG = {
 
 export default function DeviceDetailScreen({ route, navigation }: Props) {
   const { deviceId } = route.params;
-  const { devices, approveDevice, blockDevice } = useDevices();
+  const { devices, approveDevice, blockDevice, canManageDevices } = useDevices();
   const device = devices.find((d) => d.id === deviceId);
 
   const { data: probeInfo } = useQuery({
@@ -118,7 +118,7 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
           </View>
         )}
 
-        {device.status !== 'approved' && (
+        {device.status !== 'approved' && canManageDevices && (
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: colors.approvedLight }]}
             onPress={() => { approveDevice(device.id); navigation.goBack(); }}
@@ -128,7 +128,7 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
           </TouchableOpacity>
         )}
 
-        {device.status !== 'blocked' && (
+        {device.status !== 'blocked' && canManageDevices && (
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: colors.blockedLight }]}
             onPress={() => { blockDevice(device.id); navigation.goBack(); }}

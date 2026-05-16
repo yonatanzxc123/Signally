@@ -2,19 +2,42 @@
 Admin manager.
 """
 
+from __future__ import annotations
+
 from signally.models.device import Device, DeviceStatus
+from signally.models.user import UserRole
 from signally.services.device_service import DeviceService
 from signally.services.event_service import EventService
+from signally.services.user_service import UserService
 from signally.utils.time_utils import utc_now
 
 
 class AdminManager:
-    def __init__(self, device_service: DeviceService, event_service: EventService) -> None:
+    def __init__(
+        self,
+        device_service: DeviceService,
+        event_service: EventService,
+        user_service: UserService | None = None,
+    ) -> None:
         self.device_service = device_service
         self.event_service = event_service
+        self.user_service = user_service or UserService(device_service.session)
 
-    def approve_device(self, mac_address: str) -> Device:
+    def approve_device(
+        self,
+        mac_address: str,
+        actor_role: UserRole | str = UserRole.ADMIN,
+        owner_name: str | None = None,
+        owner_role: UserRole | str = UserRole.GUEST,
+    ) -> Device:
+        self.user_service.require_admin(actor_role)
         device = self.device_service.update_status(mac_address, DeviceStatus.AUTHORIZED)
+        if owner_name:
+            _, device = self.user_service.create_user_for_device(
+                mac_address=device.mac_address,
+                display_name=owner_name,
+                role=owner_role,
+            )
         self.event_service.log_event(
             event_type="DEVICE_APPROVED",
             details="Admin approved device",
@@ -22,7 +45,11 @@ class AdminManager:
         )
         return device
 
-    def approve_all_pending_devices(self) -> list[Device]:
+    def approve_all_pending_devices(
+        self,
+        actor_role: UserRole | str = UserRole.ADMIN,
+    ) -> list[Device]:
+        self.user_service.require_admin(actor_role)
         devices = self.device_service.list_pending_devices()
 
         for device in devices:
@@ -37,7 +64,12 @@ class AdminManager:
         self.device_service.session.commit()
         return devices
 
-    def block_device(self, mac_address: str) -> Device:
+    def block_device(
+        self,
+        mac_address: str,
+        actor_role: UserRole | str = UserRole.ADMIN,
+    ) -> Device:
+        self.user_service.require_admin(actor_role)
         device = self.device_service.update_status(mac_address, DeviceStatus.BLOCKED)
         self.event_service.log_event(
             event_type="DEVICE_BLOCKED",
@@ -46,7 +78,12 @@ class AdminManager:
         )
         return device
 
-    def delete_device(self, mac_address: str) -> None:
+    def delete_device(
+        self,
+        mac_address: str,
+        actor_role: UserRole | str = UserRole.ADMIN,
+    ) -> None:
+        self.user_service.require_admin(actor_role)
         self.device_service.delete_device(mac_address)
         self.event_service.log_event(
             event_type="DEVICE_DELETED",

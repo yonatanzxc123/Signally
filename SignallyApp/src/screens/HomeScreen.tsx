@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import StatusCard from '../components/StatusCard';
 import LogItem from '../components/LogItem';
 import { colors, spacing, radius, font } from '../theme';
@@ -21,7 +21,7 @@ import { useEvents } from '../context/EventsContext';
 import { api } from '../api/client';
 
 export default function HomeScreen() {
-  const { logout } = useAuth();
+  const { logout, role } = useAuth();
   const { devices } = useDevices();
   const { events } = useEvents();
   const queryClient = useQueryClient();
@@ -35,7 +35,18 @@ export default function HomeScreen() {
     },
   });
 
+  const { data: systemState } = useQuery({
+    queryKey: ['system-state'],
+    queryFn: api.getSystemState,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+    retry: false,
+  });
+
   const hasUnknown = devices.some((d) => d.status === 'unknown');
+  const shouldNotifyRole =
+    (systemState?.current_intruder_count ?? 0) > 0 &&
+    (systemState?.notification_audience ?? []).includes(role);
   const recentEvents = events.slice(0, 5);
   const scanning = scanMutation.isPending;
 
@@ -84,7 +95,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        <StatusCard hasUnknown={hasUnknown} deviceCount={devices.length} />
+        <StatusCard hasUnknown={shouldNotifyRole || (!systemState && hasUnknown)} deviceCount={devices.length} />
 
         <View style={styles.statsRow}>
           <View style={styles.statCard}>

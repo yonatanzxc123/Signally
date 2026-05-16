@@ -10,6 +10,7 @@ interface Props {
   onApprove: (id: string) => void;
   onBlock: (id: string) => void;
   onPress?: (id: string) => void;
+  canManage?: boolean;
 }
 
 type StatusConfig = {
@@ -40,7 +41,7 @@ const STATUS_CONFIG: Record<string, StatusConfig> = {
   },
 };
 
-export default function DeviceItem({ device, onApprove, onBlock, onPress }: Props) {
+export default function DeviceItem({ device, onApprove, onBlock, onPress, canManage = true }: Props) {
   const cfg = STATUS_CONFIG[device.status];
   const { ssidsByMac } = useEvents();
   const probedSsids = !device.ip ? (ssidsByMac[device.mac.toUpperCase()] ?? []) : [];
@@ -79,7 +80,7 @@ export default function DeviceItem({ device, onApprove, onBlock, onPress }: Prop
         </View>
       </View>
 
-      {device.status === 'unknown' && (
+      {device.status === 'unknown' && canManage && (
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.btn, styles.btnApprove]}

@@ -13,10 +13,10 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 import threading
 import time
-from signally.config import MONITOR_INTERVAL_SECONDS
+from signally.config import CURRENT_UNKNOWN_WINDOW_SECONDS, MONITOR_INTERVAL_SECONDS
 from signally.db.init_db import initialize_database
 from signally.network_scanner.scanner import NetworkScanner
 from signally.wifi_probing.wifi_probing_service import WifiProbingService
@@ -31,6 +31,8 @@ from signally.api.dependencies import (
 )
 from signally.models.correlation_models import CorrelationContext
 from signally.api.schemas import (
+    ApproveDeviceRequest,
+    AssignDeviceRequest,
     DeviceResponse,
     EventResponse,
     MessageResponse,
@@ -39,17 +41,22 @@ from signally.api.schemas import (
     WifiProbingStartRequest,
     WifiProbingStatusResponse,
     SystemStateResponse,
-    MonitoringCycleResponse
+    MonitoringCycleResponse,
+    UserCreateRequest,
+    UserResponse,
 )
 from signally.config import (
     EVENT_WIFI_PROBE_DEVICE_DISCOVERED_NEW,
     EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN,
 )
+from signally.models.user import UserRole
+from signally.services.user_service import UserService
 
 
 def run_background_monitor():
     """ Background thread: Runs ARP, gathers Probes, and evaluates Correlation. """
     while True:
+        session = None
         try:
             session = get_db_session()
             scanner = NetworkScanner()
@@ -61,12 +68,16 @@ def run_background_monitor():
             # --- CORRELATION EVALUATION ---
             csi_detected = csi_provider.is_presence_detected()
             connected_presence = services["presence_service"].get_presence_snapshot()
-            nearby_devices = WifiProbingService(session).list_recent_devices(limit=50)
+            nearby_presence = WifiProbingService(session).get_presence_snapshot(
+                connected_presence=connected_presence,
+                limit=50,
+            )
             
             context = CorrelationContext(
                 csi_presence_detected=csi_detected,
-                nearby_device_count=len(nearby_devices),
-                connected_presence=connected_presence
+                nearby_device_count=len(nearby_presence.nearby_devices),
+                connected_presence=connected_presence,
+                nearby_presence=nearby_presence,
             )
             
             decision = services["correlation_service"].evaluate(context)
@@ -75,10 +86,11 @@ def run_background_monitor():
                 services["alert_service"].raise_unauthorized_presence_alert()
             elif decision.decision == "HIGH_ALERT":
                 services["alert_service"].raise_blocked_device_alert()
-                
-            session.close()
         except Exception as e:
             print(f"Monitor Loop Error: {e}")
+        finally:
+            if session is not None:
+                session.close()
         
         time.sleep(MONITOR_INTERVAL_SECONDS)
 
@@ -86,13 +98,17 @@ def run_background_monitor():
 app = FastAPI(title="Signally API", version="1.0.0")
 
 
-def to_device_response(device) -> DeviceResponse:
+def to_device_response(device, user_service: UserService | None = None) -> DeviceResponse:
+    owner = user_service.get_device_owner(device.mac_address) if user_service else None
     return DeviceResponse(
         mac_address=device.mac_address,
         ip_address=device.ip_address,
         status=device.status.value if hasattr(device.status, "value") else str(device.status),
         first_seen=device.first_seen,
         last_seen=device.last_seen,
+        owner_user_id=owner.id if owner else None,
+        owner_name=owner.display_name if owner else None,
+        owner_role=owner.role.value if owner else None,
     )
 
 
@@ -104,6 +120,30 @@ def to_event_response(event) -> EventResponse:
         details=event.details,
         created_at=event.created_at,
     )
+
+
+def to_user_response(user) -> UserResponse:
+    return UserResponse(
+        id=user.id,
+        display_name=user.display_name,
+        role=user.role.value if hasattr(user.role, "value") else str(user.role),
+        created_at=user.created_at,
+    )
+
+
+def parse_actor_role(value: Optional[str]) -> UserRole:
+    if not value:
+        return UserRole.ADMIN
+    try:
+        return UserRole(value.upper())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Unknown user role: {0}".format(value))
+
+
+def select_current_unknown_devices(connected_presence, nearby_presence):
+    if connected_presence.pending_connected_devices:
+        return connected_presence.pending_connected_devices
+    return nearby_presence.effective_unknown_nearby_devices
 
 
 
@@ -151,7 +191,7 @@ def scan_network():
         services = build_services(session)
         processed = services["device_service"].process_scan_results(discovered)
 
-        return [to_device_response(device) for device in processed]
+        return [to_device_response(device, services["user_service"]) for device in processed]
     finally:
         session.close()
 
@@ -162,7 +202,7 @@ def list_devices():
     try:
         services = build_services(session)
         devices = services["device_service"].list_all_devices()
-        return [to_device_response(device) for device in devices]
+        return [to_device_response(device, services["user_service"]) for device in devices]
     finally:
         session.close()
 
@@ -173,57 +213,91 @@ def list_pending_devices():
     try:
         services = build_services(session)
         devices = services["admin_manager"].list_pending_devices()
-        return [to_device_response(device) for device in devices]
+        return [to_device_response(device, services["user_service"]) for device in devices]
     finally:
         session.close()
 
 
 @app.post("/devices/approve-all", response_model=list[DeviceResponse])
-def approve_all_pending_devices():
+def approve_all_pending_devices(
+    x_signally_user_role: Optional[str] = Header(default=None),
+):
     session = get_db_session()
     try:
         services = build_services(session)
-        devices = services["admin_manager"].approve_all_pending_devices()
-        return [to_device_response(device) for device in devices]
+        try:
+            devices = services["admin_manager"].approve_all_pending_devices(
+                actor_role=parse_actor_role(x_signally_user_role),
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc))
+        return [to_device_response(device, services["user_service"]) for device in devices]
     finally:
         session.close()
 
 
 @app.post("/devices/{mac_address}/approve", response_model=DeviceResponse)
-def approve_device(mac_address: str):
+def approve_device(
+    mac_address: str,
+    request: Optional[ApproveDeviceRequest] = None,
+    x_signally_user_role: Optional[str] = Header(default=None),
+):
     session = get_db_session()
     try:
         services = build_services(session)
         try:
-            device = services["admin_manager"].approve_device(mac_address)
+            device = services["admin_manager"].approve_device(
+                mac_address,
+                actor_role=parse_actor_role(x_signally_user_role),
+                owner_name=request.owner_name if request else None,
+                owner_role=request.owner_role if request else UserRole.GUEST,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc))
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
-        return to_device_response(device)
+        return to_device_response(device, services["user_service"])
     finally:
         session.close()
 
 
 @app.post("/devices/{mac_address}/block", response_model=DeviceResponse)
-def block_device(mac_address: str):
+def block_device(
+    mac_address: str,
+    x_signally_user_role: Optional[str] = Header(default=None),
+):
     session = get_db_session()
     try:
         services = build_services(session)
         try:
-            device = services["admin_manager"].block_device(mac_address)
+            device = services["admin_manager"].block_device(
+                mac_address,
+                actor_role=parse_actor_role(x_signally_user_role),
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc))
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
-        return to_device_response(device)
+        return to_device_response(device, services["user_service"])
     finally:
         session.close()
 
 
 @app.delete("/devices/{mac_address}", response_model=MessageResponse)
-def delete_device(mac_address: str):
+def delete_device(
+    mac_address: str,
+    x_signally_user_role: Optional[str] = Header(default=None),
+):
     session = get_db_session()
     try:
         services = build_services(session)
         try:
-            services["admin_manager"].delete_device(mac_address)
+            services["admin_manager"].delete_device(
+                mac_address,
+                actor_role=parse_actor_role(x_signally_user_role),
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc))
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
 
@@ -239,6 +313,64 @@ def list_events(limit: int = 50):
         services = build_services(session)
         events = services["event_service"].list_recent_events(limit=limit)
         return [to_event_response(event) for event in events]
+    finally:
+        session.close()
+
+
+@app.get("/users", response_model=list[UserResponse])
+def list_users():
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        return [to_user_response(user) for user in services["user_service"].list_users()]
+    finally:
+        session.close()
+
+
+@app.post("/users", response_model=UserResponse)
+def create_user(
+    request: UserCreateRequest,
+    x_signally_user_role: Optional[str] = Header(default=None),
+):
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        try:
+            services["user_service"].require_admin(parse_actor_role(x_signally_user_role))
+            user = services["user_service"].create_user(
+                display_name=request.display_name,
+                role=request.role,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        return to_user_response(user)
+    finally:
+        session.close()
+
+
+@app.post("/devices/{mac_address}/assign-user", response_model=DeviceResponse)
+def assign_device_to_user(
+    mac_address: str,
+    request: AssignDeviceRequest,
+    x_signally_user_role: Optional[str] = Header(default=None),
+):
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        try:
+            services["user_service"].require_admin(parse_actor_role(x_signally_user_role))
+            device = services["user_service"].assign_device_to_user(
+                mac_address=mac_address,
+                user_id=request.user_id,
+                mark_authorized=request.mark_authorized,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        return to_device_response(device, services["user_service"])
     finally:
         session.close()
 
@@ -347,7 +479,8 @@ def get_device_probe_info(mac_address: str):
 
 
 @app.post("/wifi_probing/start", response_model=MessageResponse)
-def start_wifi_probing(request: WifiProbingStartRequest):
+def start_wifi_probing(request: Optional[WifiProbingStartRequest] = None):
+    request = request or WifiProbingStartRequest(mock_mode=True)
     try:
         wifi_probing_state.start(interface=request.interface, mock_mode=request.mock_mode)
     except (ValueError, RuntimeError) as exc:
@@ -379,8 +512,9 @@ def list_wifi_probing_devices(limit: int = 50):
     session = get_db_session()
     try:
         service = WifiProbingService(session)
+        user_service = UserService(session)
         devices = service.list_recent_devices(limit=limit)
-        return [to_device_response(device) for device in devices]
+        return [to_device_response(device, user_service) for device in devices]
     finally:
         session.close()
 
@@ -426,8 +560,12 @@ def list_nearby_devices(limit: int = 50):
     session = get_db_session()
     try:
         service = WifiProbingService(session)
-        devices = service.list_recent_devices(limit=limit)
-        return [to_device_response(device) for device in devices]
+        user_service = UserService(session)
+        devices = service.list_recent_devices(
+            limit=limit,
+            window_seconds=CURRENT_UNKNOWN_WINDOW_SECONDS,
+        )
+        return [to_device_response(device, user_service) for device in devices]
     finally:
         session.close()
 
@@ -439,12 +577,16 @@ def get_system_state():
         services = build_services(session)
         csi_detected = csi_provider.is_presence_detected()
         connected_presence = services["presence_service"].get_presence_snapshot()
-        nearby_devices = WifiProbingService(session).list_recent_devices(limit=50)
+        nearby_presence = WifiProbingService(session).get_presence_snapshot(
+            connected_presence=connected_presence,
+            limit=50,
+        )
         
         context = CorrelationContext(
             csi_presence_detected=csi_detected,
-            nearby_device_count=len(nearby_devices),
-            connected_presence=connected_presence
+            nearby_device_count=len(nearby_presence.nearby_devices),
+            connected_presence=connected_presence,
+            nearby_presence=nearby_presence,
         )
         
         decision = services["correlation_service"].evaluate(context)
@@ -452,9 +594,23 @@ def get_system_state():
         return SystemStateResponse(
             csi_presence_detected=csi_detected,
             approved_user_present=connected_presence.approved_user_present,
+            admin_present=connected_presence.admin_present,
+            family_present=connected_presence.family_present,
+            guest_present=connected_presence.guest_present,
             decision=decision.decision,
             reason=decision.reason,
-            present_devices=[to_device_response(d) for d in connected_presence.connected_devices]
+            present_devices=[
+                to_device_response(d, services["user_service"])
+                for d in connected_presence.connected_devices
+            ],
+            current_intruder_count=decision.current_intruder_count,
+            current_unknown_devices=[
+                to_device_response(d, services["user_service"])
+                for d in select_current_unknown_devices(connected_presence, nearby_presence)
+            ],
+            ignored_authorized_duplicate_count=decision.ignored_authorized_duplicate_count,
+            admin_review_grace_active=decision.admin_review_grace_active,
+            notification_audience=decision.notification_audience,
         )
     finally:
         session.close()
@@ -471,25 +627,36 @@ def run_monitoring_cycle():
         
         csi_detected = csi_provider.is_presence_detected()
         connected_presence = services["presence_service"].get_presence_snapshot()
-        nearby_devices = WifiProbingService(session).list_recent_devices(limit=50)
+        nearby_presence = WifiProbingService(session).get_presence_snapshot(
+            connected_presence=connected_presence,
+            limit=50,
+        )
         
         context = CorrelationContext(
             csi_presence_detected=csi_detected,
-            nearby_device_count=len(nearby_devices),
-            connected_presence=connected_presence
+            nearby_device_count=len(nearby_presence.nearby_devices),
+            connected_presence=connected_presence,
+            nearby_presence=nearby_presence,
         )
         decision = services["correlation_service"].evaluate(context)
         
         return MonitoringCycleResponse(
             csi_presence_detected=csi_detected,
             approved_user_present=connected_presence.approved_user_present,
+            admin_present=connected_presence.admin_present,
+            family_present=connected_presence.family_present,
+            guest_present=connected_presence.guest_present,
             decision=decision.decision,
             reason=decision.reason,
             processed_devices_count=len(discovered),
             present_devices_count=len(connected_presence.connected_devices),
             authorized_devices_count=len(connected_presence.authorised_connected_devices),
             pending_devices_count=len(connected_presence.pending_connected_devices),
-            blocked_devices_count=len(connected_presence.blocked_connected_devices)
+            blocked_devices_count=len(connected_presence.blocked_connected_devices),
+            current_intruder_count=decision.current_intruder_count,
+            ignored_authorized_duplicate_count=decision.ignored_authorized_duplicate_count,
+            admin_review_grace_active=decision.admin_review_grace_active,
+            notification_audience=decision.notification_audience,
         )
     finally:
         session.close()

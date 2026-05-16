@@ -8,6 +8,7 @@ const BASE_URL =
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type BackendDeviceStatus = 'PENDING' | 'AUTHORIZED' | 'BLOCKED';
+export type ApiUserRole = 'ADMIN' | 'FAMILY' | 'GUEST';
 
 export interface ApiDevice {
   mac_address: string;
@@ -15,6 +16,9 @@ export interface ApiDevice {
   status: BackendDeviceStatus;
   first_seen: string;
   last_seen: string;
+  owner_user_id?: number | null;
+  owner_name?: string | null;
+  owner_role?: ApiUserRole | null;
 }
 
 export interface ApiEvent {
@@ -28,14 +32,25 @@ export interface ApiEvent {
 export interface ApiSystemState {
   csi_presence_detected: boolean;
   approved_user_present: boolean;
+  admin_present: boolean;
+  family_present: boolean;
+  guest_present: boolean;
   decision: string;
   reason: string;
   present_devices: ApiDevice[];
+  current_intruder_count: number;
+  current_unknown_devices: ApiDevice[];
+  ignored_authorized_duplicate_count: number;
+  admin_review_grace_active: boolean;
+  notification_audience: ApiUserRole[];
 }
 
 export interface ApiMonitoringCycle {
   csi_presence_detected: boolean;
   approved_user_present: boolean;
+  admin_present: boolean;
+  family_present: boolean;
+  guest_present: boolean;
   decision: string;
   reason: string;
   processed_devices_count: number;
@@ -43,6 +58,10 @@ export interface ApiMonitoringCycle {
   authorized_devices_count: number;
   pending_devices_count: number;
   blocked_devices_count: number;
+  current_intruder_count: number;
+  ignored_authorized_duplicate_count: number;
+  admin_review_grace_active: boolean;
+  notification_audience: ApiUserRole[];
 }
 
 export interface ApiMessage {
@@ -63,10 +82,14 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
   try {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(options?.headers ?? {}),
+    };
     const res = await fetch(`${BASE_URL}${path}`, {
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
       ...options,
+      headers,
+      signal: controller.signal,
     });
     if (!res.ok) {
       const body = await res.text();
@@ -78,18 +101,31 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
 }
 
+function roleHeaders(role: ApiUserRole): HeadersInit {
+  return { 'X-Signally-User-Role': role };
+}
+
 // ── API ────────────────────────────────────────────────────────────────────
 
 export const api = {
   // Devices
   getDevices: () => request<ApiDevice[]>('/devices'),
   getPendingDevices: () => request<ApiDevice[]>('/devices/pending'),
-  approveDevice: (mac: string) =>
-    request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/approve`, { method: 'POST' }),
-  approveAllPendingDevices: () =>
-    request<ApiDevice[]>('/devices/approve-all', { method: 'POST' }),
-  blockDevice: (mac: string) =>
-    request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/block`, { method: 'POST' }),
+  approveDevice: (mac: string, role: ApiUserRole = 'ADMIN') =>
+    request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/approve`, {
+      method: 'POST',
+      headers: roleHeaders(role),
+    }),
+  approveAllPendingDevices: (role: ApiUserRole = 'ADMIN') =>
+    request<ApiDevice[]>('/devices/approve-all', {
+      method: 'POST',
+      headers: roleHeaders(role),
+    }),
+  blockDevice: (mac: string, role: ApiUserRole = 'ADMIN') =>
+    request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/block`, {
+      method: 'POST',
+      headers: roleHeaders(role),
+    }),
   deleteDevice: (mac: string) =>
     request<ApiMessage>(`/devices/${encodeURIComponent(mac)}`, { method: 'DELETE' }),
 

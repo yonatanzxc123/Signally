@@ -11,7 +11,7 @@ from signally.models.device import Device, DeviceStatus
 from signally.network_scanner.dto import DiscoveredDevice
 from signally.services.event_service import EventService
 from signally.utils.time_utils import utc_now
-from signally.config import UNASSOCIATED_IP_ADDRESS
+from signally.config import EVENT_DEVICE_DISCOVERED_NEW, EVENT_DEVICE_SEEN_AGAIN
 
 
 
@@ -51,7 +51,7 @@ class DeviceService:
                 self.session.refresh(device)
 
                 self.event_service.log_event(
-                    event_type="DEVICE_DISCOVERED_NEW",
+                    event_type=EVENT_DEVICE_DISCOVERED_NEW,
                     details="New device discovered at IP {0}".format(device.ip_address),
                     device_mac=device.mac_address,
                 )
@@ -61,6 +61,12 @@ class DeviceService:
                 existing.last_seen = utc_now()
                 self.session.commit()
                 self.session.refresh(existing)
+
+                self.event_service.log_event(
+                    event_type=EVENT_DEVICE_SEEN_AGAIN,
+                    details="Known device seen again at IP {0}".format(existing.ip_address),
+                    device_mac=existing.mac_address,
+                )
                 processed_devices.append(existing)
 
         return processed_devices
@@ -112,7 +118,8 @@ class DeviceService:
             self.session.refresh(device)
             return device, True
 
-        device.ip_address = ip_address
+        if ip_address is not None:
+            device.ip_address = ip_address
         device.last_seen = utc_now()
         self.session.commit()
         self.session.refresh(device)

@@ -14,6 +14,9 @@ class DeviceResponse(BaseModel):
     status: str
     first_seen: datetime
     last_seen: datetime
+    owner_user_id: Optional[int] = None
+    owner_name: Optional[str] = None
+    owner_role: Optional[str] = None
 
 
 class EventResponse(BaseModel):
@@ -40,13 +43,24 @@ class CsiPresenceResponse(BaseModel):
 class SystemStateResponse(BaseModel):
     csi_presence_detected: bool
     approved_user_present: bool
+    admin_present: bool = False
+    family_present: bool = False
+    guest_present: bool = False
     decision: str
     reason: str
     present_devices: list[DeviceResponse]
+    current_intruder_count: int = 0
+    current_unknown_devices: list[DeviceResponse] = []
+    ignored_authorized_duplicate_count: int = 0
+    admin_review_grace_active: bool = False
+    notification_audience: list[str] = []
 
 class MonitoringCycleResponse(BaseModel):
     csi_presence_detected: bool
     approved_user_present: bool
+    admin_present: bool = False
+    family_present: bool = False
+    guest_present: bool = False
     decision: str
     reason: str
     processed_devices_count: int
@@ -54,6 +68,32 @@ class MonitoringCycleResponse(BaseModel):
     authorized_devices_count: int
     pending_devices_count: int
     blocked_devices_count: int
+    current_intruder_count: int = 0
+    ignored_authorized_duplicate_count: int = 0
+    admin_review_grace_active: bool = False
+    notification_audience: list[str] = []
+
+
+class UserResponse(BaseModel):
+    id: int
+    display_name: str
+    role: str
+    created_at: datetime
+
+
+class UserCreateRequest(BaseModel):
+    display_name: str
+    role: str
+
+
+class AssignDeviceRequest(BaseModel):
+    user_id: int
+    mark_authorized: bool = True
+
+
+class ApproveDeviceRequest(BaseModel):
+    owner_name: Optional[str] = None
+    owner_role: str = "GUEST"
 
 
 class ProbeInfoResponse(BaseModel):

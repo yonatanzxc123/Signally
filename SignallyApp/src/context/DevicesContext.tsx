@@ -2,6 +2,7 @@ import React, { createContext, useContext } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiDevice } from '../api/client';
 import { Device, DeviceStatus, formatTimestamp } from '../types';
+import { useAuth } from './AuthContext';
 
 interface DevicesContextValue {
   devices: Device[];
@@ -10,6 +11,7 @@ interface DevicesContextValue {
   approveDevice: (id: string) => void;
   approveAllUnknownDevices: () => void;
   blockDevice: (id: string) => void;
+  canManageDevices: boolean;
 }
 
 const DevicesContext = createContext<DevicesContextValue | null>(null);
@@ -33,6 +35,7 @@ function mapDevice(d: ApiDevice): Device {
 
 export function DevicesProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
+  const { role, isAdmin } = useAuth();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['devices'],
@@ -55,14 +58,14 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
   }
 
   const approveMutation = useMutation({
-    mutationFn: (mac: string) => api.approveDevice(mac),
+    mutationFn: (mac: string) => api.approveDevice(mac, role),
     onMutate: (mac) => optimisticallyUpdateStatus(mac, 'AUTHORIZED'),
     onSuccess: (updated) => patchDeviceInCache(updated),
     onError: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
   });
 
   const approveAllMutation = useMutation({
-    mutationFn: api.approveAllPendingDevices,
+    mutationFn: () => api.approveAllPendingDevices(role),
     onMutate: () => {
       queryClient.setQueryData<ApiDevice[]>(['devices'], (old) =>
         old?.map((d) => d.status === 'PENDING' ? { ...d, status: 'AUTHORIZED' } : d) ?? []
@@ -78,7 +81,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
   });
 
   const blockMutation = useMutation({
-    mutationFn: (mac: string) => api.blockDevice(mac),
+    mutationFn: (mac: string) => api.blockDevice(mac, role),
     onMutate: (mac) => optimisticallyUpdateStatus(mac, 'BLOCKED'),
     onSuccess: (updated) => patchDeviceInCache(updated),
     onError: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
@@ -92,9 +95,16 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
         devices,
         isLoading,
         error: error as Error | null,
-        approveDevice: (id) => approveMutation.mutate(id),
-        approveAllUnknownDevices: () => approveAllMutation.mutate(),
-        blockDevice: (id) => blockMutation.mutate(id),
+        approveDevice: (id) => {
+          if (isAdmin) approveMutation.mutate(id);
+        },
+        approveAllUnknownDevices: () => {
+          if (isAdmin) approveAllMutation.mutate();
+        },
+        blockDevice: (id) => {
+          if (isAdmin) blockMutation.mutate(id);
+        },
+        canManageDevices: isAdmin,
       }}
     >
       {children}
