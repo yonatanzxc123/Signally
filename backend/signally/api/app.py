@@ -179,7 +179,7 @@ def on_startup() -> None:
     
     # 2. Auto-Fallback for Layer 2 (Wi-Fi Probing)
     # This is the name we expect the Wavlink to have once in monitor mode
-    EXPECTED_WIFI_INTERFACE = "wlx803f5d168019"
+    EXPECTED_WIFI_INTERFACE = "wlan1"
     
     try:
         # VALIDATION STEP: Check if the interface is actually plugged in
