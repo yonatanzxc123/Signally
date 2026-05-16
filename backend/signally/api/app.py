@@ -171,6 +171,8 @@ def to_security_mode_response(state) -> SecurityModeResponse:
         armed=mode == SecurityMode.AWAY.value,
         updated_by_role=state.updated_by_role,
         updated_at=state.updated_at,
+    )
+
 def to_connected_inspection_response(result) -> ConnectedInspectionResponse:
     return ConnectedInspectionResponse(
         device_category=result.device_category,
