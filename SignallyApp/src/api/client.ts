@@ -16,6 +16,9 @@ export interface ApiDeviceFingerprint {
   display_name: string;
   confidence: number;
   hostname: string | null;
+  randomized_mac: boolean;
+  primary_layer: string;
+  connected: boolean;
   signals: string[];
 }
 

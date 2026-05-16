@@ -38,6 +38,7 @@ from signally.api.schemas import (
     EventResponse,
     MessageResponse,
     ProbeInfoResponse,
+    SetDeviceHostnameHintRequest,
     SetCsiPresenceRequest,
     WifiProbingStartRequest,
     WifiProbingStatusResponse,
@@ -150,6 +151,9 @@ def to_fingerprint_response(fingerprint) -> DeviceFingerprintResponse:
         display_name=fingerprint.display_name,
         confidence=fingerprint.confidence,
         hostname=fingerprint.hostname,
+        randomized_mac=fingerprint.randomized_mac,
+        primary_layer=fingerprint.primary_layer,
+        connected=fingerprint.connected,
         signals=fingerprint.signals,
     )
 
@@ -370,6 +374,35 @@ def get_device_fingerprint(mac_address: str):
             raise HTTPException(status_code=404, detail="Device with MAC {0} was not found".format(mac_address))
         owner = services["user_service"].get_device_owner(device.mac_address)
         fingerprint = services["fingerprint_service"].fingerprint_device(device, owner=owner)
+        return to_fingerprint_response(fingerprint)
+    finally:
+        session.close()
+
+
+@app.post("/devices/{mac_address}/hostname-hint", response_model=DeviceFingerprintResponse)
+def set_device_hostname_hint(
+    mac_address: str,
+    request: SetDeviceHostnameHintRequest,
+    x_signally_user_role: Optional[str] = Header(default=None),
+):
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        try:
+            services["user_service"].require_admin(parse_actor_role(x_signally_user_role))
+            device = services["device_service"].get_by_mac(mac_address)
+            if device is None:
+                raise ValueError("Device with MAC {0} was not found".format(mac_address))
+            services["fingerprint_service"].set_hostname_hint(
+                mac_address=device.mac_address,
+                hostname=request.hostname,
+            )
+            owner = services["user_service"].get_device_owner(device.mac_address)
+            fingerprint = services["fingerprint_service"].fingerprint_device(device, owner=owner)
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
         return to_fingerprint_response(fingerprint)
     finally:
         session.close()

@@ -22,6 +22,31 @@ def add_device(session, mac_address="AA:BB:CC:DD:EE:40", ip_address="192.168.1.4
     return device
 
 
+def test_arp_connected_device_records_primary_layer():
+    session = build_session()
+    device = add_device(session)
+    service = FingerprintService(session)
+
+    fingerprint = service.fingerprint_device(device)
+
+    assert fingerprint.connected is True
+    assert fingerprint.primary_layer == "ARP"
+    assert fingerprint.confidence >= 0.3
+    assert "ARP_CONNECTED" in fingerprint.signals
+
+
+def test_probe_only_device_has_weaker_primary_layer():
+    session = build_session()
+    device = add_device(session, ip_address=None)
+    service = FingerprintService(session)
+
+    fingerprint = service.fingerprint_device(device)
+
+    assert fingerprint.connected is False
+    assert fingerprint.primary_layer == "PROBING"
+    assert "ARP_CONNECTED" not in fingerprint.signals
+
+
 def test_hostname_can_infer_iphone(monkeypatch):
     session = build_session()
     device = add_device(session)
@@ -68,5 +93,59 @@ def test_probe_ssids_hint_phone_when_other_signals_missing(monkeypatch):
     fingerprint = service.fingerprint_device(device)
 
     assert fingerprint.device_category == "PHONE"
-    assert fingerprint.confidence == 0.45
+    assert fingerprint.confidence == 0.4
+    assert fingerprint.randomized_mac is True
     assert "WIFI_PROBE_SSIDS" in fingerprint.signals
+
+
+def test_offline_oui_fallback_infers_observed_samsung_phone(monkeypatch):
+    session = build_session()
+    device = add_device(
+        session,
+        mac_address="38:8A:06:9A:3B:3C",
+        ip_address="10.100.102.21",
+    )
+    service = FingerprintService(session)
+    monkeypatch.setattr(service, "_get_hostname", lambda _: None)
+
+    fingerprint = service.fingerprint_device(device)
+
+    assert fingerprint.manufacturer == "Samsung"
+    assert fingerprint.device_category == "PHONE"
+    assert fingerprint.display_name == "Samsung Phone"
+    assert "MAC_VENDOR" in fingerprint.signals
+
+
+def test_hostname_hint_overrides_missing_reverse_dns(monkeypatch):
+    session = build_session()
+    device = add_device(session)
+    service = FingerprintService(session)
+    monkeypatch.setattr(service, "_get_vendor", lambda _: None)
+    monkeypatch.setattr(service, "_get_hostname", lambda _: None)
+
+    service.set_hostname_hint(device.mac_address, "Kitchen-Samsung-TV")
+    fingerprint = service.fingerprint_device(device)
+
+    assert fingerprint.device_category == "TV"
+    assert fingerprint.manufacturer == "Samsung"
+    assert fingerprint.hostname == "Kitchen-Samsung-TV"
+    assert "HOSTNAME_HINT" in fingerprint.signals
+
+
+def test_randomized_mac_is_flagged_and_oui_is_not_trusted(monkeypatch):
+    session = build_session()
+    device = add_device(
+        session,
+        mac_address="3A:8A:06:9A:3B:3C",
+        ip_address="10.100.102.21",
+    )
+    service = FingerprintService(session)
+    monkeypatch.setattr(service, "_get_hostname", lambda _: None)
+
+    fingerprint = service.fingerprint_device(device)
+
+    assert fingerprint.randomized_mac is True
+    assert fingerprint.manufacturer is None
+    assert fingerprint.device_category == "UNKNOWN"
+    assert fingerprint.display_name == "Randomized MAC Device"
+    assert "RANDOMIZED_MAC" in fingerprint.signals

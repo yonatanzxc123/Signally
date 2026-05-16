@@ -14,6 +14,9 @@ class DeviceFingerprintResponse(BaseModel):
     display_name: str
     confidence: float
     hostname: Optional[str] = None
+    randomized_mac: bool = False
+    primary_layer: str = "UNKNOWN"
+    connected: bool = False
     signals: list[str]
 
 
@@ -104,6 +107,10 @@ class AssignDeviceRequest(BaseModel):
 class ApproveDeviceRequest(BaseModel):
     owner_name: Optional[str] = None
     owner_role: str = "GUEST"
+
+
+class SetDeviceHostnameHintRequest(BaseModel):
+    hostname: str
 
 
 class ProbeInfoResponse(BaseModel):

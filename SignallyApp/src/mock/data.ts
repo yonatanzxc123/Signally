@@ -11,6 +11,9 @@ export const MOCK_DEVICES: Device[] = [
     vendor: 'Apple',
     category: 'PHONE',
     confidence: 0.9,
+    randomizedMac: false,
+    primaryLayer: 'ARP',
+    connected: true,
     fingerprintSignals: ['OWNER_ASSIGNED', 'MAC_VENDOR'],
   },
   {
@@ -23,6 +26,9 @@ export const MOCK_DEVICES: Device[] = [
     vendor: 'Apple',
     category: 'COMPUTER',
     confidence: 0.8,
+    randomizedMac: false,
+    primaryLayer: 'ARP',
+    connected: true,
     fingerprintSignals: ['HOSTNAME', 'MAC_VENDOR'],
   },
   {
@@ -35,6 +41,9 @@ export const MOCK_DEVICES: Device[] = [
     vendor: 'Unknown',
     category: 'UNKNOWN',
     confidence: 0,
+    randomizedMac: true,
+    primaryLayer: 'ARP',
+    connected: true,
     fingerprintSignals: [],
   },
   {
@@ -47,6 +56,9 @@ export const MOCK_DEVICES: Device[] = [
     vendor: 'Samsung',
     category: 'TV',
     confidence: 0.78,
+    randomizedMac: false,
+    primaryLayer: 'ARP',
+    connected: true,
     fingerprintSignals: ['HOSTNAME', 'MAC_VENDOR'],
   },
   {
@@ -59,6 +71,9 @@ export const MOCK_DEVICES: Device[] = [
     vendor: 'Unknown',
     category: 'UNKNOWN',
     confidence: 0,
+    randomizedMac: true,
+    primaryLayer: 'ARP',
+    connected: true,
     fingerprintSignals: [],
   },
 ];

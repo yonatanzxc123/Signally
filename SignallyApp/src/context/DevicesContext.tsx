@@ -32,6 +32,9 @@ function mapDevice(d: ApiDevice): Device {
     vendor: d.fingerprint?.manufacturer ?? 'Unknown',
     category: d.fingerprint?.device_category ?? 'UNKNOWN',
     confidence: d.fingerprint?.confidence ?? 0,
+    randomizedMac: d.fingerprint?.randomized_mac ?? false,
+    primaryLayer: d.fingerprint?.primary_layer ?? (d.ip_address ? 'ARP' : 'PROBING'),
+    connected: d.fingerprint?.connected ?? !!d.ip_address,
     fingerprintSignals: d.fingerprint?.signals ?? [],
   };
 }

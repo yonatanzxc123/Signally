@@ -17,6 +17,9 @@ export interface Device {
   vendor: string;
   category: string;
   confidence: number;
+  randomizedMac: boolean;
+  primaryLayer: string;
+  connected: boolean;
   fingerprintSignals: string[];
 }
 
