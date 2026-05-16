@@ -102,6 +102,29 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     }, OPTIMISTIC_STATUS_HOLD_MS);
   }
 
+  function setManyLocalOptimisticStatuses(
+    updates: Array<{ mac: string; status: ApiDevice['status'] }>,
+  ) {
+    for (const update of updates) {
+      const normalizedMac = update.mac.toUpperCase();
+      if (optimisticTimers.current[normalizedMac]) {
+        clearTimeout(optimisticTimers.current[normalizedMac]);
+      }
+      optimisticTimers.current[normalizedMac] = setTimeout(() => {
+        clearLocalOptimisticStatus(normalizedMac);
+        delete optimisticTimers.current[normalizedMac];
+      }, OPTIMISTIC_STATUS_HOLD_MS);
+    }
+
+    setOptimisticStatuses((old) => {
+      const next = { ...old };
+      for (const update of updates) {
+        next[update.mac.toUpperCase()] = update.status;
+      }
+      return next;
+    });
+  }
+
   function clearLocalOptimisticStatus(mac: string) {
     const normalizedMac = mac.toUpperCase();
     if (optimisticTimers.current[normalizedMac]) {
@@ -193,15 +216,11 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
       queryClient.setQueryData<ApiDevice[]>(['devices'], (old) =>
         old?.map((d) => d.status === 'PENDING' ? { ...d, status: 'AUTHORIZED' } : d) ?? []
       );
-      setOptimisticStatuses((old) => {
-        const next = { ...old };
-        for (const device of snapshot.devices ?? []) {
-          if (device.status === 'PENDING') {
-            next[device.mac_address.toUpperCase()] = 'AUTHORIZED';
-          }
-        }
-        return next;
-      });
+      setManyLocalOptimisticStatuses(
+        (snapshot.devices ?? [])
+          .filter((device) => device.status === 'PENDING')
+          .map((device) => ({ mac: device.mac_address, status: 'AUTHORIZED' }))
+      );
       queryClient.setQueryData<ApiSystemState>(['system-state'], (old) => {
         if (!old) return old;
         return {
@@ -226,7 +245,6 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
       restoreOptimisticSnapshot(snapshot);
     },
     onSettled: () => {
-      clearAllLocalOptimisticStatuses();
       queryClient.invalidateQueries({ queryKey: ['devices'] });
       queryClient.invalidateQueries({ queryKey: ['system-state'] });
       queryClient.invalidateQueries({ queryKey: ['events'] });
@@ -294,15 +312,14 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
         },
         approveAllUnknownDevices: () => {
           if (isAdmin) {
-            setOptimisticStatuses((old) => {
-              const next = { ...old };
-              for (const device of data ?? []) {
-                if ((optimisticStatuses[device.mac_address.toUpperCase()] ?? device.status) === 'PENDING') {
-                  next[device.mac_address.toUpperCase()] = 'AUTHORIZED';
-                }
-              }
-              return next;
-            });
+            setManyLocalOptimisticStatuses(
+              (data ?? [])
+                .filter(
+                  (device) =>
+                    (optimisticStatuses[device.mac_address.toUpperCase()] ?? device.status) === 'PENDING'
+                )
+                .map((device) => ({ mac: device.mac_address, status: 'AUTHORIZED' }))
+            );
             approveAllMutation.mutate();
           }
         },
