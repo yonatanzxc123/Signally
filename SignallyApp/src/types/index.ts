@@ -15,6 +15,9 @@ export interface Device {
   status: DeviceStatus;
   lastSeen: string;
   vendor: string;
+  category: string;
+  confidence: number;
+  fingerprintSignals: string[];
 }
 
 export interface NetworkEvent {

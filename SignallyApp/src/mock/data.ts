@@ -9,6 +9,9 @@ export const MOCK_DEVICES: Device[] = [
     status: 'approved',
     lastSeen: '2 min ago',
     vendor: 'Apple',
+    category: 'PHONE',
+    confidence: 0.9,
+    fingerprintSignals: ['OWNER_ASSIGNED', 'MAC_VENDOR'],
   },
   {
     id: '2',
@@ -18,6 +21,9 @@ export const MOCK_DEVICES: Device[] = [
     status: 'approved',
     lastSeen: '5 min ago',
     vendor: 'Apple',
+    category: 'COMPUTER',
+    confidence: 0.8,
+    fingerprintSignals: ['HOSTNAME', 'MAC_VENDOR'],
   },
   {
     id: '3',
@@ -27,6 +33,9 @@ export const MOCK_DEVICES: Device[] = [
     status: 'unknown',
     lastSeen: 'Just now',
     vendor: 'Unknown',
+    category: 'UNKNOWN',
+    confidence: 0,
+    fingerprintSignals: [],
   },
   {
     id: '4',
@@ -36,6 +45,9 @@ export const MOCK_DEVICES: Device[] = [
     status: 'approved',
     lastSeen: '1 hour ago',
     vendor: 'Samsung',
+    category: 'TV',
+    confidence: 0.78,
+    fingerprintSignals: ['HOSTNAME', 'MAC_VENDOR'],
   },
   {
     id: '5',
@@ -45,6 +57,9 @@ export const MOCK_DEVICES: Device[] = [
     status: 'blocked',
     lastSeen: '3 hours ago',
     vendor: 'Unknown',
+    category: 'UNKNOWN',
+    confidence: 0,
+    fingerprintSignals: [],
   },
 ];
 

@@ -8,6 +8,15 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+class DeviceFingerprintResponse(BaseModel):
+    manufacturer: Optional[str] = None
+    device_category: str
+    display_name: str
+    confidence: float
+    hostname: Optional[str] = None
+    signals: list[str]
+
+
 class DeviceResponse(BaseModel):
     mac_address: str
     ip_address: Optional[str] = None
@@ -17,6 +26,7 @@ class DeviceResponse(BaseModel):
     owner_user_id: Optional[int] = None
     owner_name: Optional[str] = None
     owner_role: Optional[str] = None
+    fingerprint: Optional[DeviceFingerprintResponse] = None
 
 
 class EventResponse(BaseModel):

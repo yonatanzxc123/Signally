@@ -83,6 +83,8 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
           <InfoRow icon="hardware-chip-outline" label="MAC Address" value={device.mac} mono />
           <InfoRow icon="globe-outline" label="IP Address" value={device.ip || '—'} mono />
           <InfoRow icon="business-outline" label="Manufacturer" value={probeInfo?.vendor ?? device.vendor} />
+          <InfoRow icon="phone-portrait-outline" label="Device Type" value={device.category} />
+          <InfoRow icon="analytics-outline" label="Fingerprint Confidence" value={`${Math.round(device.confidence * 100)}%`} />
           <InfoRow icon="time-outline" label="Last Seen" value={device.lastSeen} />
         </View>
 

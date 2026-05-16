@@ -25,11 +25,14 @@ function mapDevice(d: ApiDevice): Device {
   return {
     id: d.mac_address,
     mac: d.mac_address,
-    name: 'Unknown Device',
+    name: d.owner_name ?? d.fingerprint?.display_name ?? 'Unknown Device',
     ip: d.ip_address,
     status: statusMap[d.status] ?? 'unknown',
     lastSeen: formatTimestamp(new Date(d.last_seen)),
-    vendor: 'Unknown',
+    vendor: d.fingerprint?.manufacturer ?? 'Unknown',
+    category: d.fingerprint?.device_category ?? 'UNKNOWN',
+    confidence: d.fingerprint?.confidence ?? 0,
+    fingerprintSignals: d.fingerprint?.signals ?? [],
   };
 }
 

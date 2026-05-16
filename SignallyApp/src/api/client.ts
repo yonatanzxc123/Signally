@@ -10,6 +10,15 @@ const BASE_URL =
 export type BackendDeviceStatus = 'PENDING' | 'AUTHORIZED' | 'BLOCKED';
 export type ApiUserRole = 'ADMIN' | 'FAMILY' | 'GUEST';
 
+export interface ApiDeviceFingerprint {
+  manufacturer: string | null;
+  device_category: string;
+  display_name: string;
+  confidence: number;
+  hostname: string | null;
+  signals: string[];
+}
+
 export interface ApiDevice {
   mac_address: string;
   ip_address: string | null;
@@ -19,6 +28,7 @@ export interface ApiDevice {
   owner_user_id?: number | null;
   owner_name?: string | null;
   owner_role?: ApiUserRole | null;
+  fingerprint?: ApiDeviceFingerprint | null;
 }
 
 export interface ApiEvent {
@@ -133,6 +143,8 @@ export const api = {
 
   getDeviceProbeInfo: (mac: string) =>
     request<ApiProbeInfo>(`/probe-info/${encodeURIComponent(mac)}`),
+  getDeviceFingerprint: (mac: string) =>
+    request<ApiDeviceFingerprint>(`/devices/${encodeURIComponent(mac)}/fingerprint`),
 
   // Wifi Probing
   startWifiProbing: () => request<ApiMessage>('/wifi_probing/start', { method: 'POST' }),

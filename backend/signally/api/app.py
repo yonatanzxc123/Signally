@@ -33,6 +33,7 @@ from signally.models.correlation_models import CorrelationContext
 from signally.api.schemas import (
     ApproveDeviceRequest,
     AssignDeviceRequest,
+    DeviceFingerprintResponse,
     DeviceResponse,
     EventResponse,
     MessageResponse,
@@ -50,6 +51,7 @@ from signally.config import (
     EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN,
 )
 from signally.models.user import UserRole
+from signally.services.fingerprint_service import FingerprintService
 from signally.services.user_service import UserService
 
 
@@ -98,8 +100,17 @@ def run_background_monitor():
 app = FastAPI(title="Signally API", version="1.0.0")
 
 
-def to_device_response(device, user_service: UserService | None = None) -> DeviceResponse:
+def to_device_response(
+    device,
+    user_service: UserService | None = None,
+    fingerprint_service: FingerprintService | None = None,
+) -> DeviceResponse:
     owner = user_service.get_device_owner(device.mac_address) if user_service else None
+    fingerprint = (
+        fingerprint_service.fingerprint_device(device, owner=owner)
+        if fingerprint_service
+        else None
+    )
     return DeviceResponse(
         mac_address=device.mac_address,
         ip_address=device.ip_address,
@@ -109,6 +120,7 @@ def to_device_response(device, user_service: UserService | None = None) -> Devic
         owner_user_id=owner.id if owner else None,
         owner_name=owner.display_name if owner else None,
         owner_role=owner.role.value if owner else None,
+        fingerprint=to_fingerprint_response(fingerprint) if fingerprint else None,
     )
 
 
@@ -128,6 +140,17 @@ def to_user_response(user) -> UserResponse:
         display_name=user.display_name,
         role=user.role.value if hasattr(user.role, "value") else str(user.role),
         created_at=user.created_at,
+    )
+
+
+def to_fingerprint_response(fingerprint) -> DeviceFingerprintResponse:
+    return DeviceFingerprintResponse(
+        manufacturer=fingerprint.manufacturer,
+        device_category=fingerprint.device_category,
+        display_name=fingerprint.display_name,
+        confidence=fingerprint.confidence,
+        hostname=fingerprint.hostname,
+        signals=fingerprint.signals,
     )
 
 
@@ -191,7 +214,10 @@ def scan_network():
         services = build_services(session)
         processed = services["device_service"].process_scan_results(discovered)
 
-        return [to_device_response(device, services["user_service"]) for device in processed]
+        return [
+            to_device_response(device, services["user_service"], services["fingerprint_service"])
+            for device in processed
+        ]
     finally:
         session.close()
 
@@ -202,7 +228,10 @@ def list_devices():
     try:
         services = build_services(session)
         devices = services["device_service"].list_all_devices()
-        return [to_device_response(device, services["user_service"]) for device in devices]
+        return [
+            to_device_response(device, services["user_service"], services["fingerprint_service"])
+            for device in devices
+        ]
     finally:
         session.close()
 
@@ -213,7 +242,10 @@ def list_pending_devices():
     try:
         services = build_services(session)
         devices = services["admin_manager"].list_pending_devices()
-        return [to_device_response(device, services["user_service"]) for device in devices]
+        return [
+            to_device_response(device, services["user_service"], services["fingerprint_service"])
+            for device in devices
+        ]
     finally:
         session.close()
 
@@ -231,7 +263,10 @@ def approve_all_pending_devices(
             )
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc))
-        return [to_device_response(device, services["user_service"]) for device in devices]
+        return [
+            to_device_response(device, services["user_service"], services["fingerprint_service"])
+            for device in devices
+        ]
     finally:
         session.close()
 
@@ -256,7 +291,11 @@ def approve_device(
             raise HTTPException(status_code=403, detail=str(exc))
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
-        return to_device_response(device, services["user_service"])
+        return to_device_response(
+            device,
+            services["user_service"],
+            services["fingerprint_service"],
+        )
     finally:
         session.close()
 
@@ -278,7 +317,11 @@ def block_device(
             raise HTTPException(status_code=403, detail=str(exc))
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
-        return to_device_response(device, services["user_service"])
+        return to_device_response(
+            device,
+            services["user_service"],
+            services["fingerprint_service"],
+        )
     finally:
         session.close()
 
@@ -313,6 +356,21 @@ def list_events(limit: int = 50):
         services = build_services(session)
         events = services["event_service"].list_recent_events(limit=limit)
         return [to_event_response(event) for event in events]
+    finally:
+        session.close()
+
+
+@app.get("/devices/{mac_address}/fingerprint", response_model=DeviceFingerprintResponse)
+def get_device_fingerprint(mac_address: str):
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        device = services["device_service"].get_by_mac(mac_address)
+        if device is None:
+            raise HTTPException(status_code=404, detail="Device with MAC {0} was not found".format(mac_address))
+        owner = services["user_service"].get_device_owner(device.mac_address)
+        fingerprint = services["fingerprint_service"].fingerprint_device(device, owner=owner)
+        return to_fingerprint_response(fingerprint)
     finally:
         session.close()
 
@@ -370,7 +428,11 @@ def assign_device_to_user(
             raise HTTPException(status_code=403, detail=str(exc))
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
-        return to_device_response(device, services["user_service"])
+        return to_device_response(
+            device,
+            services["user_service"],
+            services["fingerprint_service"],
+        )
     finally:
         session.close()
 
@@ -513,8 +575,12 @@ def list_wifi_probing_devices(limit: int = 50):
     try:
         service = WifiProbingService(session)
         user_service = UserService(session)
+        fingerprint_service = FingerprintService(session)
         devices = service.list_recent_devices(limit=limit)
-        return [to_device_response(device, user_service) for device in devices]
+        return [
+            to_device_response(device, user_service, fingerprint_service)
+            for device in devices
+        ]
     finally:
         session.close()
 
@@ -561,11 +627,15 @@ def list_nearby_devices(limit: int = 50):
     try:
         service = WifiProbingService(session)
         user_service = UserService(session)
+        fingerprint_service = FingerprintService(session)
         devices = service.list_recent_devices(
             limit=limit,
             window_seconds=CURRENT_UNKNOWN_WINDOW_SECONDS,
         )
-        return [to_device_response(device, user_service) for device in devices]
+        return [
+            to_device_response(device, user_service, fingerprint_service)
+            for device in devices
+        ]
     finally:
         session.close()
 
@@ -600,12 +670,20 @@ def get_system_state():
             decision=decision.decision,
             reason=decision.reason,
             present_devices=[
-                to_device_response(d, services["user_service"])
+                to_device_response(
+                    d,
+                    services["user_service"],
+                    services["fingerprint_service"],
+                )
                 for d in connected_presence.connected_devices
             ],
             current_intruder_count=decision.current_intruder_count,
             current_unknown_devices=[
-                to_device_response(d, services["user_service"])
+                to_device_response(
+                    d,
+                    services["user_service"],
+                    services["fingerprint_service"],
+                )
                 for d in select_current_unknown_devices(connected_presence, nearby_presence)
             ],
             ignored_authorized_duplicate_count=decision.ignored_authorized_duplicate_count,
