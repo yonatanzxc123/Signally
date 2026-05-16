@@ -33,12 +33,12 @@ from signally.models.correlation_models import CorrelationContext
 from signally.api.schemas import (
     ApproveDeviceRequest,
     AssignDeviceRequest,
+    ConnectedInspectionResponse,
     DeviceFingerprintResponse,
     DeviceResponse,
     EventResponse,
     MessageResponse,
     ProbeInfoResponse,
-    SetDeviceHostnameHintRequest,
     SetCsiPresenceRequest,
     WifiProbingStartRequest,
     WifiProbingStatusResponse,
@@ -52,6 +52,7 @@ from signally.config import (
     EVENT_WIFI_PROBE_DEVICE_SEEN_AGAIN,
 )
 from signally.models.user import UserRole
+from signally.services.connected_inspection_service import ConnectedInspectionService
 from signally.services.fingerprint_service import FingerprintService
 from signally.services.user_service import UserService
 
@@ -146,7 +147,6 @@ def to_user_response(user) -> UserResponse:
 
 def to_fingerprint_response(fingerprint) -> DeviceFingerprintResponse:
     return DeviceFingerprintResponse(
-        manufacturer=fingerprint.manufacturer,
         device_category=fingerprint.device_category,
         display_name=fingerprint.display_name,
         confidence=fingerprint.confidence,
@@ -155,6 +155,19 @@ def to_fingerprint_response(fingerprint) -> DeviceFingerprintResponse:
         primary_layer=fingerprint.primary_layer,
         connected=fingerprint.connected,
         signals=fingerprint.signals,
+    )
+
+
+def to_connected_inspection_response(result) -> ConnectedInspectionResponse:
+    return ConnectedInspectionResponse(
+        device_category=result.device_category,
+        confidence=result.confidence,
+        hostname=result.hostname,
+        mdns_services=result.mdns_services,
+        nmap_device_type=result.nmap_device_type,
+        nmap_os=result.nmap_os,
+        open_ports=result.open_ports,
+        signals=result.signals,
     )
 
 
@@ -379,10 +392,9 @@ def get_device_fingerprint(mac_address: str):
         session.close()
 
 
-@app.post("/devices/{mac_address}/hostname-hint", response_model=DeviceFingerprintResponse)
-def set_device_hostname_hint(
+@app.post("/devices/{mac_address}/inspect", response_model=ConnectedInspectionResponse)
+def inspect_connected_device(
     mac_address: str,
-    request: SetDeviceHostnameHintRequest,
     x_signally_user_role: Optional[str] = Header(default=None),
 ):
     session = get_db_session()
@@ -393,17 +405,12 @@ def set_device_hostname_hint(
             device = services["device_service"].get_by_mac(mac_address)
             if device is None:
                 raise ValueError("Device with MAC {0} was not found".format(mac_address))
-            services["fingerprint_service"].set_hostname_hint(
-                mac_address=device.mac_address,
-                hostname=request.hostname,
-            )
-            owner = services["user_service"].get_device_owner(device.mac_address)
-            fingerprint = services["fingerprint_service"].fingerprint_device(device, owner=owner)
+            result = ConnectedInspectionService(session).inspect_device(device)
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc))
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
-        return to_fingerprint_response(fingerprint)
+        return to_connected_inspection_response(result)
     finally:
         session.close()
 
@@ -514,15 +521,6 @@ def reset_database_content():
         session.close()
 
 
-def _get_vendor(mac_address: str) -> Optional[str]:
-    try:
-        from scapy.all import conf
-        vendor = conf.manufdb.getManufLong(mac_address)
-        return vendor if vendor else None
-    except Exception:
-        return None
-
-
 def _parse_probe_details(details: str) -> dict:
     result = {}
     for part in details.split('; '):
@@ -566,7 +564,6 @@ def get_device_probe_info(mac_address: str):
 
         return ProbeInfoResponse(
             mac_address=mac_address.upper(),
-            vendor=_get_vendor(mac_address),
             known_ssids=seen_ssids,
             latest_rssi=latest_rssi,
             is_nearby_only=is_nearby_only,

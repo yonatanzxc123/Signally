@@ -14,7 +14,6 @@ export interface Device {
   ip: string | null;
   status: DeviceStatus;
   lastSeen: string;
-  vendor: string;
   category: string;
   confidence: number;
   randomizedMac: boolean;

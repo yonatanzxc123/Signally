@@ -9,9 +9,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DevicesStackParamList } from '../navigation/DevicesStack';
 import { useDevices } from '../context/DevicesContext';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { colors, font, radius, spacing } from '../theme';
 
@@ -26,6 +27,8 @@ const STATUS_CONFIG = {
 export default function DeviceDetailScreen({ route, navigation }: Props) {
   const { deviceId } = route.params;
   const { devices, approveDevice, blockDevice, canManageDevices } = useDevices();
+  const { role } = useAuth();
+  const queryClient = useQueryClient();
   const device = devices.find((d) => d.id === deviceId);
 
   const { data: probeInfo } = useQuery({
@@ -33,6 +36,13 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
     queryFn: () => api.getDeviceProbeInfo(deviceId),
     retry: false,
     enabled: !!device,
+  });
+
+  const inspectMutation = useMutation({
+    mutationFn: () => api.inspectDevice(deviceId, role),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+    },
   });
 
   if (!device) {
@@ -65,7 +75,7 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
             <Ionicons name="phone-portrait-outline" size={36} color={cfg.color} />
           </View>
           <Text style={styles.heroName}>{device.name}</Text>
-          <Text style={styles.heroVendor}>{probeInfo?.vendor ?? device.vendor}</Text>
+          <Text style={styles.heroVendor}>{device.category}</Text>
           <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
             <Ionicons name={cfg.icon} size={13} color={cfg.color} />
             <Text style={[styles.badgeText, { color: cfg.color }]}>{cfg.label}</Text>
@@ -82,13 +92,25 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
           <Text style={styles.sectionTitle}>Network Info</Text>
           <InfoRow icon="hardware-chip-outline" label="MAC Address" value={device.mac} mono />
           <InfoRow icon="globe-outline" label="IP Address" value={device.ip || '—'} mono />
-          <InfoRow icon="business-outline" label="Manufacturer" value={probeInfo?.vendor ?? device.vendor} />
           <InfoRow icon="phone-portrait-outline" label="Device Type" value={device.category} />
           <InfoRow icon="layers-outline" label="Primary Layer" value={device.primaryLayer} />
           <InfoRow icon="analytics-outline" label="Fingerprint Confidence" value={`${Math.round(device.confidence * 100)}%`} />
           <InfoRow icon="shuffle-outline" label="Randomized MAC" value={device.randomizedMac ? 'Yes' : 'No'} />
           <InfoRow icon="time-outline" label="Last Seen" value={device.lastSeen} />
         </View>
+
+        {device.ip && canManageDevices && (
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: '#EFF6FF' }]}
+            onPress={() => inspectMutation.mutate()}
+            disabled={inspectMutation.isPending}
+          >
+            <Ionicons name="search-outline" size={20} color={colors.accent} />
+            <Text style={[styles.actionBtnText, { color: colors.accent }]}>
+              {inspectMutation.isPending ? 'Inspecting...' : 'Inspect Device Type'}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {probeInfo && (probeInfo.known_ssids.length > 0 || probeInfo.latest_rssi != null) && (
           <View style={styles.section}>
