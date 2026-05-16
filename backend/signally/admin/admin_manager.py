@@ -98,6 +98,9 @@ class AdminManager:
         return self.event_service.delete_all_events()
 
     def reset_database_content(self) -> dict:
+        deleted_device_owners = self.user_service.delete_all_device_owners()
+        deleted_users = self.user_service.delete_all_users()
+
         devices = self.device_service.list_all_devices()
         deleted_devices = len(devices)
 
@@ -115,6 +118,8 @@ class AdminManager:
         return {
             "deleted_devices": deleted_devices,
             "deleted_events": deleted_events,
+            "deleted_users": deleted_users,
+            "deleted_device_owners": deleted_device_owners,
         }
 
     def list_pending_devices(self) -> list[Device]:

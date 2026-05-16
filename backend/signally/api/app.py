@@ -503,9 +503,11 @@ def reset_database_content():
         services = build_services(session)
         result = services["admin_manager"].reset_database_content()
         return MessageResponse(
-            message="Database reset complete. Deleted {0} device(s) and {1} event(s).".format(
+            message="Database reset complete. Deleted {0} device(s), {1} event(s), {2} user(s), and {3} device owner link(s).".format(
                 result["deleted_devices"],
                 result["deleted_events"],
+                result["deleted_users"],
+                result["deleted_device_owners"],
             )
         )
     finally:

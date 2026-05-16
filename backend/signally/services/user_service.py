@@ -101,3 +101,23 @@ class UserService:
             mark_authorized=True,
         )
         return user, device
+
+    def delete_all_device_owners(self) -> int:
+        owners = list(self.session.scalars(select(DeviceOwner)).all())
+        count = len(owners)
+
+        for owner in owners:
+            self.session.delete(owner)
+
+        self.session.commit()
+        return count
+
+    def delete_all_users(self) -> int:
+        users = self.list_users()
+        count = len(users)
+
+        for user in users:
+            self.session.delete(user)
+
+        self.session.commit()
+        return count

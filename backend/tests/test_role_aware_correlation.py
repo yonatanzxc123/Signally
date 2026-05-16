@@ -8,7 +8,7 @@ from signally.admin.admin_manager import AdminManager
 from signally.db.base import Base
 from signally.models.device import Device
 from signally.models.correlation_models import CorrelationContext
-from signally.models.user import UserRole
+from signally.models.user import DeviceOwner, User, UserRole
 from signally.network_scanner.dto import DiscoveredDevice
 from signally.services.correlation_service import CorrelationService
 from signally.services.device_service import DeviceService
@@ -151,3 +151,23 @@ def test_authorized_arp_phone_suppresses_one_randomized_probe_duplicate(monkeypa
     assert len(nearby_presence.unknown_nearby_devices) == 1
     assert nearby_presence.ignored_authorized_duplicate_count == 1
     assert nearby_presence.effective_unknown_nearby_count == 0
+
+
+def test_reset_database_content_deletes_users_and_device_owners():
+    session = build_session()
+    device_service, _, admin_manager, _ = build_services(session)
+    scan_one(device_service, "AA:BB:CC:DD:EE:27", "192.168.1.27")
+    admin_manager.approve_device(
+        "AA:BB:CC:DD:EE:27",
+        owner_name="Admin Phone",
+        owner_role=UserRole.ADMIN,
+    )
+
+    result = admin_manager.reset_database_content()
+
+    assert result["deleted_devices"] == 1
+    assert result["deleted_users"] == 1
+    assert result["deleted_device_owners"] == 1
+    assert session.query(Device).count() == 0
+    assert session.query(User).count() == 0
+    assert session.query(DeviceOwner).count() == 0
