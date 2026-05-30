@@ -101,13 +101,22 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
         )}
 
         {device.status !== 'approved' && canManageDevices && (
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: colors.approvedLight }]}
-            onPress={() => { approveDevice(device.id); navigation.goBack(); }}
-          >
-            <Ionicons name="checkmark-circle-outline" size={20} color={colors.approved} />
-            <Text style={[styles.actionBtnText, { color: colors.approved }]}>Approve Device</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: colors.approvedLight }]}
+              onPress={() => { approveDevice(device.id, 'FAMILY'); navigation.goBack(); }}
+            >
+              <Ionicons name="people-outline" size={20} color={colors.approved} />
+              <Text style={[styles.actionBtnText, { color: colors.approved }]}>Approve as Family Member</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#EFF6FF' }]}
+              onPress={() => { approveDevice(device.id, 'GUEST'); navigation.goBack(); }}
+            >
+              <Ionicons name="person-add-outline" size={20} color={colors.accent} />
+              <Text style={[styles.actionBtnText, { color: colors.accent }]}>Approve as Guest (24h)</Text>
+            </TouchableOpacity>
+          </>
         )}
 
         {device.status !== 'blocked' && canManageDevices && (

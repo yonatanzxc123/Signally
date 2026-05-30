@@ -138,10 +138,11 @@ export const api = {
   // Devices
   getDevices: () => request<ApiDevice[]>('/devices'),
   getPendingDevices: () => request<ApiDevice[]>('/devices/pending'),
-  approveDevice: (mac: string, role: ApiUserRole = 'ADMIN') =>
+  approveDevice: (mac: string, ownerRole: 'FAMILY' | 'GUEST', role: ApiUserRole = 'ADMIN') =>
     request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/approve`, {
       method: 'POST',
       headers: roleHeaders(role),
+      body: JSON.stringify({ owner_role: ownerRole }),
     }),
   approveAllPendingDevices: (role: ApiUserRole = 'ADMIN') =>
     request<ApiDevice[]>('/devices/approve-all', {

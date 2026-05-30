@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session
 from signally.config import (
     EVENT_DEVICE_DISCOVERED_NEW,
     EVENT_DEVICE_SEEN_AGAIN,
+    EVENT_GUEST_APPROVAL_EXPIRED,
+    GUEST_APPROVAL_HOURS,
     PRESENCE_WINDOW_SECONDS,
 )
 from signally.models.device import Device, DeviceStatus
@@ -82,23 +84,42 @@ class PresenceService:
     def get_presence_snapshot(self) -> ConnectedPresenceSnapshot:
         present_devices = self.get_present_devices()
 
-        authorised = [d for d in present_devices if d.status == DeviceStatus.AUTHORIZED]
+        authorised = []
         pending = [d for d in present_devices if d.status == DeviceStatus.PENDING]
         blocked = [d for d in present_devices if d.status == DeviceStatus.BLOCKED]
         admin = []
         family = []
         guest = []
 
-        for device in authorised:
+        for device in present_devices:
+            if device.status != DeviceStatus.AUTHORIZED:
+                continue
+
             owner = self.user_service.get_device_owner(device.mac_address)
             if owner is None:
+                authorised.append(device)
                 continue
-            if owner.role == UserRole.ADMIN:
+
+            if owner.role == UserRole.GUEST:
+                owner_record = self.user_service.get_device_owner_record(device.mac_address)
+                if owner_record and self._guest_expired(owner_record.assigned_at):
+                    device.status = DeviceStatus.PENDING
+                    self.device_service.session.commit()
+                    self.event_service.log_event(
+                        event_type=EVENT_GUEST_APPROVAL_EXPIRED,
+                        details="Guest approval expired after {0} hours".format(GUEST_APPROVAL_HOURS),
+                        device_mac=device.mac_address,
+                    )
+                    pending.append(device)
+                    continue
+                authorised.append(device)
+                guest.append(device)
+            elif owner.role == UserRole.ADMIN:
+                authorised.append(device)
                 admin.append(device)
             elif owner.role == UserRole.FAMILY:
+                authorised.append(device)
                 family.append(device)
-            elif owner.role == UserRole.GUEST:
-                guest.append(device)
 
         return ConnectedPresenceSnapshot(
             connected_devices=present_devices,
@@ -109,6 +130,12 @@ class PresenceService:
             family_connected_devices=family,
             guest_connected_devices=guest,
         )
+
+    def _guest_expired(self, assigned_at) -> bool:
+        approved = assigned_at
+        if approved.tzinfo is None:
+            approved = approved.replace(tzinfo=timezone.utc)
+        return utc_now() > approved + timedelta(hours=GUEST_APPROVAL_HOURS)
 
     def is_approved_user_present(self) -> bool:
         return self.get_presence_snapshot().approved_user_present

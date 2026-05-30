@@ -105,8 +105,7 @@ class AssignDeviceRequest(BaseModel):
 
 
 class ApproveDeviceRequest(BaseModel):
-    owner_name: Optional[str] = None
-    owner_role: str = "GUEST"
+    owner_role: str  # must be FAMILY or GUEST
 
 
 class SetDeviceHostnameHintRequest(BaseModel):

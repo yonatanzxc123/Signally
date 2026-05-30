@@ -45,6 +45,10 @@ class UserService:
         stmt = select(User).where(User.id == user_id)
         return self.session.scalar(stmt)
 
+    def get_device_owner_record(self, mac_address: str) -> Optional[DeviceOwner]:
+        stmt = select(DeviceOwner).where(DeviceOwner.mac_address == mac_address.upper())
+        return self.session.scalar(stmt)
+
     def get_device_owner(self, mac_address: str) -> Optional[User]:
         stmt = (
             select(User)

@@ -8,7 +8,7 @@ interface DevicesContextValue {
   devices: Device[];
   isLoading: boolean;
   error: Error | null;
-  approveDevice: (id: string) => void;
+  approveDevice: (id: string, ownerRole: 'FAMILY' | 'GUEST') => void;
   approveAllUnknownDevices: () => void;
   blockDevice: (id: string) => void;
   canManageDevices: boolean;
@@ -156,8 +156,9 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
   }
 
   const approveMutation = useMutation({
-    mutationFn: (mac: string) => api.approveDevice(mac, role),
-    onMutate: async (mac) => {
+    mutationFn: ({ mac, ownerRole }: { mac: string; ownerRole: 'FAMILY' | 'GUEST' }) =>
+      api.approveDevice(mac, ownerRole, role),
+    onMutate: async ({ mac }) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: ['devices'] }),
         queryClient.cancelQueries({ queryKey: ['system-state'] }),
@@ -170,7 +171,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
       return snapshot;
     },
     onSuccess: (updated) => patchDeviceInCache(updated),
-    onError: (_error, mac, snapshot) => {
+    onError: (_error, { mac }, snapshot) => {
       clearLocalOptimisticStatus(mac);
       restoreOptimisticSnapshot(snapshot);
     },
@@ -286,10 +287,10 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
         devices,
         isLoading,
         error: error as Error | null,
-        approveDevice: (id) => {
+        approveDevice: (id, ownerRole) => {
           if (isAdmin) {
             setLocalOptimisticStatus(id, 'AUTHORIZED');
-            approveMutation.mutate(id);
+            approveMutation.mutate({ mac: id, ownerRole });
           }
         },
         approveAllUnknownDevices: () => {
