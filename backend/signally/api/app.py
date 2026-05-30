@@ -414,10 +414,7 @@ def approve_device(
             raise HTTPException(status_code=403, detail=str(exc))
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
-        return to_device_response(
-            device,
-            services["user_service"],
-        )
+        return to_device_response(device)
     finally:
         session.close()
 
@@ -439,10 +436,7 @@ def block_device(
             raise HTTPException(status_code=403, detail=str(exc))
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
-        return to_device_response(
-            device,
-            services["user_service"],
-        )
+        return to_device_response(device)
     finally:
         session.close()
 
@@ -711,18 +705,12 @@ def get_system_state():
             decision=decision.decision,
             reason=decision.reason,
             present_devices=[
-                to_device_response(
-                    d,
-                    services["user_service"],
-                )
+                to_device_response(d)
                 for d in connected_presence.connected_devices
             ],
             current_intruder_count=decision.current_intruder_count,
             current_unknown_devices=[
-                to_device_response(
-                    d,
-                    services["user_service"],
-                )
+                to_device_response(d)
                 for d in select_current_unknown_devices(connected_presence, nearby_presence)
             ],
             admin_review_grace_active=decision.admin_review_grace_active,
