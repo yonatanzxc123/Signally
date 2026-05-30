@@ -6,9 +6,10 @@ import { colors, spacing, radius, font } from '../theme';
 interface Props {
   hasUnknown: boolean;
   deviceCount: number;
+  securityMode?: 'HOME' | 'AWAY';
 }
 
-export default function StatusCard({ hasUnknown, deviceCount }: Props) {
+export default function StatusCard({ hasUnknown, deviceCount, securityMode = 'HOME' }: Props) {
   const noDevices = deviceCount === 0;
   const secure = !hasUnknown && !noDevices;
 
@@ -22,19 +23,31 @@ export default function StatusCard({ hasUnknown, deviceCount }: Props) {
         label: 'STATUS',
         statusText: 'OFFLINE',
         statusColor: colors.textMuted,
-        sub: 'No devices detected — start a scan to monitor your network',
+        sub: 'No devices detected - start a scan to monitor your network',
       }
-    : secure
+    : securityMode === 'AWAY' && secure
     ? {
         icon: 'shield-checkmark' as const,
         iconColor: colors.secure,
         iconBg: '#BBF7D0',
         cardBg: colors.secureLight,
         labelColor: colors.secure,
-        label: 'STATUS',
-        statusText: 'SECURE',
+        label: 'AWAY MODE',
+        statusText: 'ARMED',
         statusColor: colors.secure,
-        sub: 'All devices on network are recognized',
+        sub: 'Home is armed and monitoring for unknown activity',
+      }
+    : securityMode === 'HOME' && secure
+    ? {
+        icon: 'home-outline' as const,
+        iconColor: colors.accent,
+        iconBg: '#DBEAFE',
+        cardBg: colors.surface,
+        labelColor: colors.accent,
+        label: 'HOME MODE',
+        statusText: 'RELAXED',
+        statusColor: colors.accent,
+        sub: 'Trusted household presence is expected',
       }
     : {
         icon: 'shield' as const,
@@ -42,10 +55,13 @@ export default function StatusCard({ hasUnknown, deviceCount }: Props) {
         iconBg: '#FECACA',
         cardBg: colors.alertLight,
         labelColor: colors.alert,
-        label: 'STATUS',
-        statusText: 'ALERT',
+        label: securityMode === 'AWAY' ? 'AWAY MODE' : 'HOME MODE',
+        statusText: securityMode === 'AWAY' ? 'ALERT' : 'REVIEW',
         statusColor: colors.alert,
-        sub: 'Unknown device detected on your network',
+        sub:
+          securityMode === 'AWAY'
+            ? 'Unknown device detected while armed'
+            : 'Unknown device detected while Home mode is active',
       };
 
   return (

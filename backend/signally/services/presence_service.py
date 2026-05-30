@@ -18,9 +18,11 @@ from signally.config import (
     PRESENCE_WINDOW_SECONDS,
 )
 from signally.models.device import Device, DeviceStatus
+from signally.models.user import UserRole
 from signally.models.correlation_models import ConnectedPresenceSnapshot
 from signally.services.device_service import DeviceService
 from signally.services.event_service import EventService
+from signally.services.user_service import UserService
 from signally.utils.time_utils import utc_now
 
 
@@ -40,6 +42,7 @@ class PresenceService:
         self.presence_window_seconds = presence_window_seconds
         self.device_service = DeviceService(session)
         self.event_service = EventService(session)
+        self.user_service = UserService(session)
 
     def get_presence_cutoff(self):
         return utc_now() - timedelta(seconds=self.presence_window_seconds)
@@ -82,12 +85,29 @@ class PresenceService:
         authorised = [d for d in present_devices if d.status == DeviceStatus.AUTHORIZED]
         pending = [d for d in present_devices if d.status == DeviceStatus.PENDING]
         blocked = [d for d in present_devices if d.status == DeviceStatus.BLOCKED]
+        admin = []
+        family = []
+        guest = []
+
+        for device in authorised:
+            owner = self.user_service.get_device_owner(device.mac_address)
+            if owner is None:
+                continue
+            if owner.role == UserRole.ADMIN:
+                admin.append(device)
+            elif owner.role == UserRole.FAMILY:
+                family.append(device)
+            elif owner.role == UserRole.GUEST:
+                guest.append(device)
 
         return ConnectedPresenceSnapshot(
             connected_devices=present_devices,
             authorised_connected_devices=authorised,
             pending_connected_devices=pending,
             blocked_connected_devices=blocked,
+            admin_connected_devices=admin,
+            family_connected_devices=family,
+            guest_connected_devices=guest,
         )
 
     def is_approved_user_present(self) -> bool:

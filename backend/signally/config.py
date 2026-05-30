@@ -9,20 +9,7 @@ without changing business logic code.
 from __future__ import annotations
 
 import os
-import subprocess
-from typing import Optional
 
-
-def _detect_network_ssid() -> Optional[str]:
-    try:
-        result = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True, timeout=2)
-        ssid = result.stdout.strip()
-        return ssid if ssid else None
-    except Exception:
-        return None
-
-
-NETWORK_SSID: Optional[str] = os.getenv("SIGNALLY_NETWORK_SSID") or _detect_network_ssid()
 
 # Database
 DATABASE_URL = os.getenv("SIGNALLY_DATABASE_URL", "sqlite:///signally.db")
@@ -34,6 +21,8 @@ DEFAULT_SCAN_TIMEOUT = int(os.getenv("SIGNALLY_DEFAULT_SCAN_TIMEOUT", "2"))
 # Presence logic
 # A device is considered "currently present" if it was seen in the last X seconds.
 PRESENCE_WINDOW_SECONDS = int(os.getenv("SIGNALLY_PRESENCE_WINDOW_SECONDS", "30"))
+CURRENT_UNKNOWN_WINDOW_SECONDS = int(os.getenv("SIGNALLY_CURRENT_UNKNOWN_WINDOW_SECONDS", "30"))
+ADMIN_REVIEW_GRACE_SECONDS = int(os.getenv("SIGNALLY_ADMIN_REVIEW_GRACE_SECONDS", "30"))
 
 # Monitoring loop
 MONITOR_INTERVAL_SECONDS = int(os.getenv("SIGNALLY_MONITOR_INTERVAL_SECONDS", "10"))
@@ -42,6 +31,7 @@ MONITOR_INTERVAL_SECONDS = int(os.getenv("SIGNALLY_MONITOR_INTERVAL_SECONDS", "1
 UNASSOCIATED_IP_ADDRESS = os.getenv("SIGNALLY_UNASSOCIATED_IP_ADDRESS", "UNASSOCIATED")
 
 EVENT_DEVICE_DELETED = "DEVICE_DELETED"
+EVENT_SECURITY_MODE_CHANGED = "SECURITY_MODE_CHANGED"
 
 EVENT_WIFI_PROBING_STARTED = "WIFI_PROBING_STARTED"
 EVENT_WIFI_PROBING_STOPPED = "WIFI_PROBING_STOPPED"

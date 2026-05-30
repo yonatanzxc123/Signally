@@ -13,9 +13,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, font, radius, spacing } from '../theme';
+import { ApiUserRole } from '../api/client';
 
 interface Props {
-  onAuth: () => void;
+  onAuth: (role?: ApiUserRole) => void;
 }
 
 export default function AuthScreen({ onAuth }: Props) {
@@ -24,6 +25,7 @@ export default function AuthScreen({ onAuth }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [role, setRole] = useState<ApiUserRole>('ADMIN');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [toggleWidth, setToggleWidth] = useState(0);
@@ -77,7 +79,7 @@ export default function AuthScreen({ onAuth }: Props) {
     }
     setError('');
     // TODO: replace with POST /auth/login or POST /auth/signup — store returned JWT token in SecureStore
-    onAuth();
+    onAuth(role);
   }
 
   const isLogin = mode === 'login';
@@ -132,6 +134,20 @@ export default function AuthScreen({ onAuth }: Props) {
             <Animated.View
               style={{ opacity: formOpacity, transform: [{ translateX: formTranslate }] }}
             >
+              <View style={styles.roleToggle}>
+                {(['ADMIN', 'FAMILY'] as ApiUserRole[]).map((nextRole) => (
+                  <TouchableOpacity
+                    key={nextRole}
+                    style={[styles.roleBtn, role === nextRole && styles.roleBtnActive]}
+                    onPress={() => setRole(nextRole)}
+                  >
+                    <Text style={[styles.roleText, role === nextRole && styles.roleTextActive]}>
+                      {nextRole === 'ADMIN' ? 'Admin' : 'Family'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               {!isLogin && (
                 <>
                   <Text style={styles.label}>Name</Text>
@@ -284,6 +300,31 @@ const styles = StyleSheet.create({
   },
   toggleTextActive: {
     color: colors.primary,
+  },
+  roleToggle: {
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+    borderRadius: radius.sm,
+    padding: 4,
+    marginBottom: spacing.md,
+    gap: 4,
+  },
+  roleBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: radius.sm - 2,
+  },
+  roleBtnActive: {
+    backgroundColor: colors.primary,
+  },
+  roleText: {
+    fontSize: font.sm,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  roleTextActive: {
+    color: colors.surface,
   },
   label: {
     fontSize: font.sm,
