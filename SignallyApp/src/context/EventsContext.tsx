@@ -7,7 +7,6 @@ interface EventsContextValue {
   events: NetworkEvent[];
   isLoading: boolean;
   error: Error | null;
-  ssidsByMac: Record<string, string[]>;
 }
 
 const EventsContext = createContext<EventsContextValue | null>(null);
@@ -36,21 +35,6 @@ const EVENT_MESSAGE_MAP: Record<string, string> = {
 
 const LOG_EVENT_TYPES = new Set(Object.keys(EVENT_TYPE_MAP));
 
-function buildSsidMap(events: ApiEvent[]): Record<string, string[]> {
-  const map: Record<string, string[]> = {};
-  for (const e of events) {
-    if (!e.device_mac) continue;
-    if (e.event_type !== 'WIFI_PROBE_DEVICE_DISCOVERED_NEW' && e.event_type !== 'WIFI_PROBE_DEVICE_SEEN_AGAIN') continue;
-    const match = e.details.match(/ssid=([^;]*)/);
-    const ssid = match?.[1]?.trim();
-    if (!ssid) continue;
-    const mac = e.device_mac.toUpperCase();
-    if (!map[mac]) map[mac] = [];
-    if (!map[mac].includes(ssid)) map[mac].push(ssid);
-  }
-  return map;
-}
-
 function mapEvent(e: ApiEvent): NetworkEvent {
   return {
     id: String(e.id),
@@ -72,10 +56,9 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
 
   const raw = data ?? [];
   const events = raw.filter((e) => LOG_EVENT_TYPES.has(e.event_type)).map(mapEvent);
-  const ssidsByMac = buildSsidMap(raw);
 
   return (
-    <EventsContext.Provider value={{ events, isLoading, error: error as Error | null, ssidsByMac }}>
+    <EventsContext.Provider value={{ events, isLoading, error: error as Error | null }}>
       {children}
     </EventsContext.Provider>
   );
