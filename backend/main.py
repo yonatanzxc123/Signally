@@ -186,9 +186,10 @@ def main() -> None:
         elif args.command == "reset-db":
             result = admin_manager.reset_database_content()
             print(
-                "Database reset complete. Deleted {0} device(s) and {1} event(s).".format(
+                "Database reset complete. Deleted {0} device(s), {1} event(s), {2} user(s).".format(
                     result["deleted_devices"],
                     result["deleted_events"],
+                    result["deleted_users"],
                 )
             )
 
