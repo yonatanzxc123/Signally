@@ -29,6 +29,7 @@ function mapDevice(d: ApiDevice): Device {
     name: d.owner_name ?? 'Unknown Device',
     ip: d.ip_address,
     status: statusMap[d.status] ?? 'unknown',
+    ownerRole: (d.owner_role as Device['ownerRole']) ?? null,
     lastSeen: formatTimestamp(new Date(d.last_seen)),
     connected: !!d.ip_address,
   };

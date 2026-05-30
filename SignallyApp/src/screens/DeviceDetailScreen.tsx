@@ -19,9 +19,11 @@ import { colors, font, radius, spacing } from '../theme';
 type Props = NativeStackScreenProps<DevicesStackParamList, 'DeviceDetail'>;
 
 const STATUS_CONFIG = {
-  approved: { label: 'Approved', color: colors.approved, bg: colors.approvedLight, icon: 'checkmark-circle' as const },
-  unknown:  { label: 'Unknown',  color: colors.unknown,  bg: colors.unknownLight,  icon: 'help-circle' as const },
-  blocked:  { label: 'Blocked',  color: colors.blocked,  bg: colors.blockedLight,  icon: 'ban' as const },
+  approved:         { label: 'Approved',       color: colors.approved, bg: colors.approvedLight, icon: 'checkmark-circle' as const },
+  approved_family:  { label: 'Family Member',  color: colors.approved, bg: colors.approvedLight, icon: 'people' as const },
+  approved_guest:   { label: 'Guest',          color: colors.accent,   bg: '#EFF6FF',            icon: 'person' as const },
+  unknown:          { label: 'Unknown',        color: colors.unknown,  bg: colors.unknownLight,  icon: 'help-circle' as const },
+  blocked:          { label: 'Blocked',        color: colors.blocked,  bg: colors.blockedLight,  icon: 'ban' as const },
 };
 
 export default function DeviceDetailScreen({ route, navigation }: Props) {
@@ -46,7 +48,11 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
     );
   }
 
-  const cfg = STATUS_CONFIG[device.status];
+  const statusKey =
+    device.status === 'approved' && device.ownerRole === 'FAMILY' ? 'approved_family' :
+    device.status === 'approved' && device.ownerRole === 'GUEST' ? 'approved_guest' :
+    device.status;
+  const cfg = STATUS_CONFIG[statusKey] ?? STATUS_CONFIG.unknown;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
