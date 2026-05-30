@@ -16,7 +16,7 @@ from typing import Optional
 from fastapi import FastAPI, Header, HTTPException
 import threading
 import time
-from signally.config import CURRENT_UNKNOWN_WINDOW_SECONDS, MONITOR_INTERVAL_SECONDS
+from signally.config import MONITOR_INTERVAL_SECONDS
 from signally.db.init_db import initialize_database
 from signally.network_scanner.scanner import NetworkScanner
 from signally.wifi_probing.wifi_probing_service import WifiProbingService
@@ -70,15 +70,12 @@ def run_background_monitor():
             # --- CORRELATION EVALUATION ---
             csi_detected = csi_provider.is_presence_detected()
             connected_presence = services["presence_service"].get_presence_snapshot()
-            nearby_presence = WifiProbingService(session).get_presence_snapshot(
-                connected_presence=connected_presence,
-                limit=50,
-            )
+            nearby_presence = WifiProbingService(session).get_presence_snapshot()
             security_state = services["security_mode_service"].get_state()
-            
+
             context = CorrelationContext(
                 csi_presence_detected=csi_detected,
-                nearby_device_count=len(nearby_presence.nearby_devices),
+                nearby_device_count=nearby_presence.nearby_probe_count,
                 connected_presence=connected_presence,
                 nearby_presence=nearby_presence,
                 security_mode=security_state.mode,
@@ -163,10 +160,8 @@ def parse_actor_role(value: Optional[str]) -> UserRole:
         raise HTTPException(status_code=400, detail="Unknown user role: {0}".format(value))
 
 
-def select_current_unknown_devices(connected_presence, nearby_presence):
-    if connected_presence.pending_connected_devices:
-        return connected_presence.pending_connected_devices
-    return nearby_presence.unknown_nearby_devices
+def select_current_unknown_devices(connected_presence):
+    return connected_presence.pending_connected_devices
 
 
 
@@ -603,16 +598,12 @@ def get_wifi_probing_status():
     )
 
 
-@app.get("/wifi_probing/devices", response_model=list[DeviceResponse])
-def list_wifi_probing_devices(limit: int = 50):
+@app.get("/wifi_probing/probe-count")
+def get_wifi_probe_count():
     session = get_db_session()
     try:
-        service = WifiProbingService(session)
-        devices = service.list_recent_devices(limit=limit)
-        return [
-            to_device_response(device)
-            for device in devices
-        ]
+        snapshot = WifiProbingService(session).get_presence_snapshot()
+        return {"nearby_probe_count": snapshot.nearby_probe_count}
     finally:
         session.close()
 
@@ -652,22 +643,6 @@ def get_csi_status():
         "presence_strength": csi_provider.get_presence_strength(),
     }
 
-@app.get("/nearby/devices", response_model=list[DeviceResponse])
-def list_nearby_devices(limit: int = 50):
-    """ Instructor Requirement: API to get nearby unassociated devices """
-    session = get_db_session()
-    try:
-        service = WifiProbingService(session)
-        devices = service.list_recent_devices(
-            limit=limit,
-            window_seconds=CURRENT_UNKNOWN_WINDOW_SECONDS,
-        )
-        return [
-            to_device_response(device)
-            for device in devices
-        ]
-    finally:
-        session.close()
 
 @app.get("/system/state", response_model=SystemStateResponse)
 def get_system_state():
@@ -677,22 +652,19 @@ def get_system_state():
         services = build_services(session)
         csi_detected = csi_provider.is_presence_detected()
         connected_presence = services["presence_service"].get_presence_snapshot()
-        nearby_presence = WifiProbingService(session).get_presence_snapshot(
-            connected_presence=connected_presence,
-            limit=50,
-        )
+        nearby_presence = WifiProbingService(session).get_presence_snapshot()
         security_state = services["security_mode_service"].get_state()
-        
+
         context = CorrelationContext(
             csi_presence_detected=csi_detected,
-            nearby_device_count=len(nearby_presence.nearby_devices),
+            nearby_device_count=nearby_presence.nearby_probe_count,
             connected_presence=connected_presence,
             nearby_presence=nearby_presence,
             security_mode=security_state.mode,
         )
-        
+
         decision = services["correlation_service"].evaluate(context)
-        
+
         return SystemStateResponse(
             security_mode=security_state.mode.value,
             security_mode_updated_by_role=security_state.updated_by_role,
@@ -711,7 +683,7 @@ def get_system_state():
             current_intruder_count=decision.current_intruder_count,
             current_unknown_devices=[
                 to_device_response(d)
-                for d in select_current_unknown_devices(connected_presence, nearby_presence)
+                for d in select_current_unknown_devices(connected_presence)
             ],
             admin_review_grace_active=decision.admin_review_grace_active,
             notification_audience=decision.notification_audience,
@@ -731,15 +703,12 @@ def run_monitoring_cycle():
         
         csi_detected = csi_provider.is_presence_detected()
         connected_presence = services["presence_service"].get_presence_snapshot()
-        nearby_presence = WifiProbingService(session).get_presence_snapshot(
-            connected_presence=connected_presence,
-            limit=50,
-        )
+        nearby_presence = WifiProbingService(session).get_presence_snapshot()
         security_state = services["security_mode_service"].get_state()
-        
+
         context = CorrelationContext(
             csi_presence_detected=csi_detected,
-            nearby_device_count=len(nearby_presence.nearby_devices),
+            nearby_device_count=nearby_presence.nearby_probe_count,
             connected_presence=connected_presence,
             nearby_presence=nearby_presence,
             security_mode=security_state.mode,

@@ -10,6 +10,7 @@ from signally.models.device import Device
 from signally.models.security_mode import SecurityMode
 
 
+
 @dataclass
 class ConnectedPresenceSnapshot:
     connected_devices: List[Device] = field(default_factory=list)
@@ -39,10 +40,8 @@ class ConnectedPresenceSnapshot:
 
 @dataclass
 class NearbyPresenceSnapshot:
-    nearby_devices: List[Device] = field(default_factory=list)
-    unknown_nearby_devices: List[Device] = field(default_factory=list)
-    blocked_nearby_devices: List[Device] = field(default_factory=list)
-    first_unknown_seen_at: Optional[datetime] = None
+    nearby_probe_count: int = 0
+    first_probe_seen_at: Optional[datetime] = None
     window_seconds: int = 30
 
 
