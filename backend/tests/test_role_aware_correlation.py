@@ -9,7 +9,7 @@ from signally.db.base import Base
 from signally.models.device import Device
 from signally.models.correlation_models import CorrelationContext
 from signally.models.security_mode import SecurityMode
-from signally.models.user import DeviceOwner, User, UserRole
+from signally.models.user import User, UserRole
 from signally.network_scanner.dto import DiscoveredDevice
 from signally.services.correlation_service import CorrelationService
 from signally.services.device_service import DeviceService
@@ -174,21 +174,15 @@ def test_home_mode_csi_without_recent_phone_is_occupied_not_intruder():
     assert decision.notification_audience == []
 
 
-def test_reset_database_content_deletes_users_and_device_owners():
+def test_reset_database_content_deletes_devices_and_users():
     session = build_session()
     device_service, _, admin_manager, _ = build_services(session)
     scan_one(device_service, "AA:BB:CC:DD:EE:27", "192.168.1.27")
-    admin_manager.approve_device(
-        "AA:BB:CC:DD:EE:27",
-        owner_name="Admin Phone",
-        owner_role=UserRole.ADMIN,
-    )
+    admin_manager.approve_device("AA:BB:CC:DD:EE:27", owner_role=UserRole.FAMILY)
 
     result = admin_manager.reset_database_content()
 
     assert result["deleted_devices"] == 1
-    assert result["deleted_users"] == 1
-    assert result["deleted_device_owners"] == 1
+    assert result["deleted_users"] == 0
     assert session.query(Device).count() == 0
     assert session.query(User).count() == 0
-    assert session.query(DeviceOwner).count() == 0

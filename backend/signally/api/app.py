@@ -32,7 +32,6 @@ from signally.api.dependencies import (
 from signally.models.correlation_models import CorrelationContext
 from signally.api.schemas import (
     ApproveDeviceRequest,
-    AssignDeviceRequest,
     AuthResponse,
     ConnectedInspectionResponse,
     DeviceResponse,
@@ -54,7 +53,6 @@ from signally.config import EVENT_SECURITY_MODE_CHANGED
 from signally.models.security_mode import SecurityMode
 from signally.models.user import UserRole
 from signally.services.connected_inspection_service import ConnectedInspectionService
-from signally.services.user_service import UserService
 
 
 def run_background_monitor():
@@ -104,20 +102,14 @@ def run_background_monitor():
 app = FastAPI(title="Signally API", version="1.0.0")
 
 
-def to_device_response(
-    device,
-    user_service: UserService | None = None,
-) -> DeviceResponse:
-    owner = user_service.get_device_owner(device.mac_address) if user_service else None
+def to_device_response(device) -> DeviceResponse:
     return DeviceResponse(
         mac_address=device.mac_address,
         ip_address=device.ip_address,
         status=device.status.value if hasattr(device.status, "value") else str(device.status),
         first_seen=device.first_seen,
         last_seen=device.last_seen,
-        owner_user_id=owner.id if owner else None,
-        owner_name=owner.display_name if owner else None,
-        owner_role=owner.role.value if owner else None,
+        owner_role=device.owner_role,
     )
 
 
@@ -333,7 +325,7 @@ def scan_network():
         processed = services["device_service"].process_scan_results(discovered)
 
         return [
-            to_device_response(device, services["user_service"])
+            to_device_response(device)
             for device in processed
         ]
     finally:
@@ -347,7 +339,7 @@ def list_devices():
         services = build_services(session)
         devices = services["device_service"].list_all_devices()
         return [
-            to_device_response(device, services["user_service"])
+            to_device_response(device)
             for device in devices
         ]
     finally:
@@ -361,7 +353,7 @@ def list_pending_devices():
         services = build_services(session)
         devices = services["admin_manager"].list_pending_devices()
         return [
-            to_device_response(device, services["user_service"])
+            to_device_response(device)
             for device in devices
         ]
     finally:
@@ -390,7 +382,7 @@ def approve_all_pending_devices(
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc))
         return [
-            to_device_response(device, services["user_service"])
+            to_device_response(device)
             for device in devices
         ]
     finally:
@@ -545,34 +537,6 @@ def create_user(
         session.close()
 
 
-@app.post("/devices/{mac_address}/assign-user", response_model=DeviceResponse)
-def assign_device_to_user(
-    mac_address: str,
-    request: AssignDeviceRequest,
-    x_signally_user_role: Optional[str] = Header(default=None),
-):
-    session = get_db_session()
-    try:
-        services = build_services(session)
-        try:
-            services["user_service"].require_admin(parse_actor_role(x_signally_user_role))
-            device = services["user_service"].assign_device_to_user(
-                mac_address=mac_address,
-                user_id=request.user_id,
-                mark_authorized=request.mark_authorized,
-            )
-        except PermissionError as exc:
-            raise HTTPException(status_code=403, detail=str(exc))
-        except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc))
-        return to_device_response(
-            device,
-            services["user_service"],
-        )
-    finally:
-        session.close()
-
-
 @app.delete("/admin/devices", response_model=MessageResponse)
 def clear_all_devices():
     session = get_db_session()
@@ -606,11 +570,10 @@ def reset_database_content():
         services = build_services(session)
         result = services["admin_manager"].reset_database_content()
         return MessageResponse(
-            message="Database reset complete. Deleted {0} device(s), {1} event(s), {2} user(s), and {3} device owner link(s).".format(
+            message="Database reset complete. Deleted {0} device(s), {1} event(s), {2} user(s).".format(
                 result["deleted_devices"],
                 result["deleted_events"],
                 result["deleted_users"],
-                result["deleted_device_owners"],
             )
         )
     finally:
@@ -651,10 +614,9 @@ def list_wifi_probing_devices(limit: int = 50):
     session = get_db_session()
     try:
         service = WifiProbingService(session)
-        user_service = UserService(session)
         devices = service.list_recent_devices(limit=limit)
         return [
-            to_device_response(device, user_service)
+            to_device_response(device)
             for device in devices
         ]
     finally:
@@ -702,13 +664,12 @@ def list_nearby_devices(limit: int = 50):
     session = get_db_session()
     try:
         service = WifiProbingService(session)
-        user_service = UserService(session)
         devices = service.list_recent_devices(
             limit=limit,
             window_seconds=CURRENT_UNKNOWN_WINDOW_SECONDS,
         )
         return [
-            to_device_response(device, user_service)
+            to_device_response(device)
             for device in devices
         ]
     finally:

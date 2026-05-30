@@ -1,5 +1,5 @@
 """
-User and ownership business logic.
+User business logic — app authentication users only.
 """
 
 from __future__ import annotations
@@ -9,9 +9,7 @@ from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from signally.models.device import Device, DeviceStatus
-from signally.models.user import DeviceOwner, User, UserRole
-from signally.utils.time_utils import utc_now
+from signally.models.user import User, UserRole
 
 
 class UserService:
@@ -45,83 +43,10 @@ class UserService:
         stmt = select(User).where(User.id == user_id)
         return self.session.scalar(stmt)
 
-    def get_device_owner_record(self, mac_address: str) -> Optional[DeviceOwner]:
-        stmt = select(DeviceOwner).where(DeviceOwner.mac_address == mac_address.upper())
-        return self.session.scalar(stmt)
-
-    def get_device_owner(self, mac_address: str) -> Optional[User]:
-        stmt = (
-            select(User)
-            .join(DeviceOwner, DeviceOwner.user_id == User.id)
-            .where(DeviceOwner.mac_address == mac_address.upper())
-        )
-        return self.session.scalar(stmt)
-
-    def assign_device_to_user(
-        self,
-        mac_address: str,
-        user_id: int,
-        mark_authorized: bool = True,
-    ) -> Device:
-        normalized_mac = mac_address.upper()
-        user = self.get_user(user_id)
-        if user is None:
-            raise ValueError("User with id {0} was not found".format(user_id))
-
-        device = self.session.scalar(
-            select(Device).where(Device.mac_address == normalized_mac)
-        )
-        if device is None:
-            raise ValueError("Device with MAC {0} was not found".format(normalized_mac))
-
-        owner = self.session.scalar(
-            select(DeviceOwner).where(DeviceOwner.mac_address == normalized_mac)
-        )
-        if owner is None:
-            owner = DeviceOwner(mac_address=normalized_mac, user_id=user.id)
-            self.session.add(owner)
-        else:
-            owner.user_id = user.id
-            owner.assigned_at = utc_now()
-
-        if mark_authorized:
-            device.status = DeviceStatus.AUTHORIZED
-            device.last_seen = utc_now()
-
-        self.session.commit()
-        self.session.refresh(device)
-        return device
-
-    def create_user_for_device(
-        self,
-        mac_address: str,
-        display_name: str,
-        role: UserRole | str,
-    ) -> tuple[User, Device]:
-        user = self.create_user(display_name=display_name, role=role)
-        device = self.assign_device_to_user(
-            mac_address=mac_address,
-            user_id=user.id,
-            mark_authorized=True,
-        )
-        return user, device
-
-    def delete_all_device_owners(self) -> int:
-        owners = list(self.session.scalars(select(DeviceOwner)).all())
-        count = len(owners)
-
-        for owner in owners:
-            self.session.delete(owner)
-
-        self.session.commit()
-        return count
-
     def delete_all_users(self) -> int:
         users = self.list_users()
         count = len(users)
-
         for user in users:
             self.session.delete(user)
-
         self.session.commit()
         return count

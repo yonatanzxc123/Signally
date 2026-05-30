@@ -99,11 +99,6 @@ class UserCreateRequest(BaseModel):
     role: str
 
 
-class AssignDeviceRequest(BaseModel):
-    user_id: int
-    mark_authorized: bool = True
-
-
 class ApproveDeviceRequest(BaseModel):
     owner_role: str  # must be FAMILY or GUEST
 
