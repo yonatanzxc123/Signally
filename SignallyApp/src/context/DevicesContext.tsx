@@ -38,7 +38,8 @@ function mapDevice(d: ApiDevice): Device {
 export function DevicesProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const { role, isAdmin } = useAuth();
-  const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, ApiDevice['status']>>({});
+  type OptimisticPatch = { status: ApiDevice['status']; ownerRole?: ApiDevice['owner_role'] };
+  const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, OptimisticPatch>>({});
   const optimisticTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const { data, isLoading, error } = useQuery({
@@ -73,12 +74,12 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     };
   }
 
-  function setLocalOptimisticStatus(mac: string, newStatus: ApiDevice['status']) {
+  function setLocalOptimisticStatus(mac: string, newStatus: ApiDevice['status'], ownerRole?: ApiDevice['owner_role']) {
     const normalizedMac = mac.toUpperCase();
     if (optimisticTimers.current[normalizedMac]) {
       clearTimeout(optimisticTimers.current[normalizedMac]);
     }
-    setOptimisticStatuses((old) => ({ ...old, [normalizedMac]: newStatus }));
+    setOptimisticStatuses((old) => ({ ...old, [normalizedMac]: { status: newStatus, ownerRole } }));
     optimisticTimers.current[normalizedMac] = setTimeout(() => {
       clearLocalOptimisticStatus(normalizedMac);
       delete optimisticTimers.current[normalizedMac];
@@ -102,7 +103,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     setOptimisticStatuses((old) => {
       const next = { ...old };
       for (const update of updates) {
-        next[update.mac.toUpperCase()] = update.status;
+        next[update.mac.toUpperCase()] = { status: update.status };
       }
       return next;
     });
@@ -130,7 +131,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
   }
 
   function optimisticallyUpdateStatus(mac: string, newStatus: ApiDevice['status'], ownerRole?: ApiDevice['owner_role']) {
-    setLocalOptimisticStatus(mac, newStatus);
+    setLocalOptimisticStatus(mac, newStatus, ownerRole);
     queryClient.setQueryData<ApiDevice[]>(['devices'], (old) =>
       applyDeviceStatus(old, mac, newStatus, ownerRole)
     );
@@ -273,12 +274,14 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
           if (firstSeenDiff !== 0) return firstSeenDiff;
           return a.mac_address.localeCompare(b.mac_address);
         })
-        .map((device) =>
-          mapDevice({
+        .map((device) => {
+          const patch = optimisticStatuses[device.mac_address.toUpperCase()];
+          return mapDevice({
             ...device,
-            status: optimisticStatuses[device.mac_address.toUpperCase()] ?? device.status,
-          })
-        ),
+            status: patch?.status ?? device.status,
+            owner_role: patch?.ownerRole !== undefined ? patch.ownerRole : device.owner_role,
+          });
+        }),
     [data, optimisticStatuses],
   );
 
@@ -290,7 +293,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
         error: error as Error | null,
         approveDevice: (id, ownerRole) => {
           if (isAdmin) {
-            setLocalOptimisticStatus(id, 'AUTHORIZED');
+            optimisticallyUpdateStatus(id, 'AUTHORIZED', ownerRole as ApiDevice['owner_role']);
             approveMutation.mutate({ mac: id, ownerRole });
           }
         },
@@ -300,7 +303,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
               (data ?? [])
                 .filter(
                   (device) =>
-                    (optimisticStatuses[device.mac_address.toUpperCase()] ?? device.status) === 'PENDING'
+                    (optimisticStatuses[device.mac_address.toUpperCase()]?.status ?? device.status) === 'PENDING'
                 )
                 .map((device) => ({ mac: device.mac_address, status: 'AUTHORIZED' }))
             );

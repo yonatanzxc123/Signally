@@ -19,7 +19,6 @@ import { colors, font, radius, spacing } from '../theme';
 type Props = NativeStackScreenProps<DevicesStackParamList, 'DeviceDetail'>;
 
 const STATUS_CONFIG = {
-  approved:         { label: 'Approved',       color: colors.approved, bg: colors.approvedLight, icon: 'checkmark-circle' as const },
   approved_family:  { label: 'Family Member',  color: colors.approved, bg: colors.approvedLight, icon: 'people' as const },
   approved_guest:   { label: 'Guest',          color: colors.accent,   bg: '#EFF6FF',            icon: 'person' as const },
   unknown:          { label: 'Unknown',        color: colors.unknown,  bg: colors.unknownLight,  icon: 'help-circle' as const },
@@ -49,10 +48,10 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
   }
 
   const statusKey =
-    device.status === 'approved' && device.ownerRole === 'FAMILY' ? 'approved_family' :
     device.status === 'approved' && device.ownerRole === 'GUEST' ? 'approved_guest' :
+    device.status === 'approved' ? 'approved_family' :
     device.status;
-  const cfg = STATUS_CONFIG[statusKey] ?? STATUS_CONFIG.unknown;
+  const cfg = STATUS_CONFIG[statusKey as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.unknown;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

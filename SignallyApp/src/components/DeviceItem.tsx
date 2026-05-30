@@ -20,7 +20,6 @@ type StatusConfig = {
 };
 
 const STATUS_CONFIG: Record<string, StatusConfig> = {
-  approved: { label: 'Approved', color: colors.approved, bg: colors.approvedLight, icon: 'checkmark-circle' },
   approved_family: { label: 'Family', color: colors.approved, bg: colors.approvedLight, icon: 'people' },
   approved_guest: { label: 'Guest', color: colors.accent, bg: '#EFF6FF', icon: 'person' },
   unknown: { label: 'Unknown', color: colors.unknown, bg: colors.unknownLight, icon: 'help-circle' },
@@ -29,10 +28,10 @@ const STATUS_CONFIG: Record<string, StatusConfig> = {
 
 export default function DeviceItem({ device, onApprove, onBlock, onPress, canManage = true }: Props) {
   const statusKey =
-    device.status === 'approved' && device.ownerRole === 'FAMILY' ? 'approved_family' :
     device.status === 'approved' && device.ownerRole === 'GUEST' ? 'approved_guest' :
+    device.status === 'approved' ? 'approved_family' :
     device.status;
-  const cfg = STATUS_CONFIG[statusKey] ?? STATUS_CONFIG.unknown;
+  const cfg = STATUS_CONFIG[statusKey as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.unknown;
 
   return (
     <TouchableOpacity style={styles.card} onPress={() => onPress?.(device.id)} activeOpacity={onPress ? 0.7 : 1}>
