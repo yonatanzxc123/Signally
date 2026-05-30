@@ -74,7 +74,7 @@ export default function DeviceItem({ device, onApprove, onBlock, onPress, canMan
         </View>
       </View>
 
-      {device.status === 'unknown' && canManage && (
+      {(device.status === 'unknown' || device.status === 'blocked') && canManage && (
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.btn, styles.btnApprove]}

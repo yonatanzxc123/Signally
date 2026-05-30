@@ -193,6 +193,8 @@ export const api = {
   resetDatabase: () => request<ApiMessage>('/admin/reset', { method: 'DELETE' }),
 
   // Auth
+  me: (token: string) =>
+    request<ApiAuthResponse>('/auth/me', { headers: { Authorization: `Bearer ${token}` } }),
   signup: (body: { display_name: string; email: string; password: string; confirm_password: string; role: ApiUserRole }) =>
     request<ApiAuthResponse>('/auth/signup', { method: 'POST', body: JSON.stringify(body) }),
   login: (body: { email: string; password: string }) =>

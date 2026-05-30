@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { ApiAuthResponse, ApiUserRole } from '../api/client';
+import { ApiAuthResponse, ApiUserRole, api } from '../api/client';
 
 const STORAGE_KEY = 'signally_auth';
 
@@ -29,15 +29,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    SecureStore.getItemAsync(STORAGE_KEY).then((stored) => {
+    SecureStore.getItemAsync(STORAGE_KEY).then(async (stored) => {
       if (!stored) return;
       try {
-        const { token: t, user_id, display_name, role, email } = JSON.parse(stored);
-        setToken(t);
-        setUser({ userId: user_id, displayName: display_name, role, email });
+        const { token: t } = JSON.parse(stored);
+        const fresh = await api.me(t);
+        setToken(fresh.token);
+        setUser({ userId: fresh.user_id, displayName: fresh.display_name, role: fresh.role, email: fresh.email });
         setIsLoggedIn(true);
       } catch {
-        SecureStore.deleteItemAsync(STORAGE_KEY);
+        await SecureStore.deleteItemAsync(STORAGE_KEY);
       }
     });
   }, []);

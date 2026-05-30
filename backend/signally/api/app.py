@@ -212,6 +212,34 @@ def health() -> MessageResponse:
     return MessageResponse(message="Signally API is running.")
 
 
+@app.get("/auth/me", response_model=AuthResponse)
+def get_me(authorization: Optional[str] = Header(default=None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = authorization.removeprefix("Bearer ")
+    from signally.services.auth_service import decode_token
+    try:
+        payload = decode_token(token)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    session = get_db_session()
+    try:
+        from sqlalchemy import select
+        from signally.models.user import User
+        user = session.scalar(select(User).where(User.id == int(payload["sub"])))
+        if not user:
+            raise HTTPException(status_code=401, detail="User no longer exists")
+        return {
+            "token": token,
+            "user_id": user.id,
+            "display_name": user.display_name,
+            "role": user.role.value,
+            "email": user.email,
+        }
+    finally:
+        session.close()
+
+
 @app.post("/auth/signup", response_model=AuthResponse)
 def signup(request: SignupRequest):
     if request.password != request.confirm_password:

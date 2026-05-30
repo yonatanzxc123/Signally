@@ -100,7 +100,7 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
           </TouchableOpacity>
         )}
 
-        {device.status !== 'approved' && canManageDevices && (
+        {(device.status === 'unknown' || device.status === 'blocked') && canManageDevices && (
           <>
             <TouchableOpacity
               style={[styles.actionBtn, { backgroundColor: colors.approvedLight }]}
