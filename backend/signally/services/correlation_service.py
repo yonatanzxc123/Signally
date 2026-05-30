@@ -164,7 +164,6 @@ class CorrelationService:
             admin_present=admin_present,
             family_present=family_present,
             guest_present=guest_present,
-            ignored_authorized_duplicate_count=context.nearby_presence.ignored_authorized_duplicate_count,
         )
 
    def _is_admin_review_grace_active(self, context: CorrelationContext) -> bool:
