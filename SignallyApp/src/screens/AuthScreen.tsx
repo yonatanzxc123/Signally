@@ -234,11 +234,6 @@ export default function AuthScreen({ onAuth }: Props) {
                 }
               </TouchableOpacity>
 
-              {isLogin && (
-                <TouchableOpacity>
-                  <Text style={styles.forgotText}>Forgot password?</Text>
-                </TouchableOpacity>
-              )}
             </Animated.View>
           </View>
         </ScrollView>
@@ -390,11 +385,5 @@ const styles = StyleSheet.create({
     fontSize: font.lg,
     fontWeight: '700',
     letterSpacing: 0.5,
-  },
-  forgotText: {
-    textAlign: 'center',
-    marginTop: spacing.md,
-    fontSize: font.md,
-    color: colors.textSecondary,
   },
 });

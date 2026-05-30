@@ -16,6 +16,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import StatusCard from '../components/StatusCard';
 import LogItem from '../components/LogItem';
 import { colors, spacing, radius, font } from '../theme';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useDevices } from '../context/DevicesContext';
 import { useEvents } from '../context/EventsContext';
@@ -23,6 +24,7 @@ import { api, ApiSecurityMode, ApiSystemState } from '../api/client';
 
 export default function HomeScreen() {
   const { logout, role } = useAuth();
+  const navigation = useNavigation<any>();
   const { devices } = useDevices();
   const { events } = useEvents();
   const queryClient = useQueryClient();
@@ -137,7 +139,7 @@ export default function HomeScreen() {
           <View style={styles.menuCard}>
             <TouchableOpacity
               style={styles.menuItem}
-              onPress={() => setMenuVisible(false)}
+              onPress={() => { setMenuVisible(false); navigation.navigate('UserSettings'); }}
             >
               <Ionicons name="person-circle-outline" size={20} color={colors.primary} />
               <Text style={styles.menuItemText}>User Settings</Text>

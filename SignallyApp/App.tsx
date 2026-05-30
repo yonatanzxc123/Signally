@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { DevicesProvider } from './src/context/DevicesContext';
 import { EventsProvider } from './src/context/EventsContext';
-import AppNavigator from './src/navigation/AppNavigator';
+import RootNavigator from './src/navigation/RootNavigator';
 import AuthScreen from './src/screens/AuthScreen';
 
 const queryClient = new QueryClient();
@@ -19,7 +19,7 @@ function Root() {
       <StatusBar style="dark" />
       {isLoggedIn ? (
         <NavigationContainer>
-          <AppNavigator />
+          <RootNavigator />
         </NavigationContainer>
       ) : (
         <AuthScreen onAuth={(response) => login(response)} />

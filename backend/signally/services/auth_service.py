@@ -47,7 +47,7 @@ class AuthService:
 def _make_token_response(user: User) -> dict:
     expire = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS)
     token = jwt.encode(
-        {"sub": str(user.id), "role": user.role.value, "display_name": user.display_name, "exp": expire},
+        {"sub": str(user.id), "role": user.role.value, "display_name": user.display_name, "email": user.email, "exp": expire},
         JWT_SECRET,
         algorithm=JWT_ALGORITHM,
     )
@@ -56,6 +56,7 @@ def _make_token_response(user: User) -> dict:
         "user_id": user.id,
         "display_name": user.display_name,
         "role": user.role.value,
+        "email": user.email,
     }
 
 

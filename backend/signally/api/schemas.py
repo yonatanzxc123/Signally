@@ -142,6 +142,7 @@ class AuthResponse(BaseModel):
     user_id: int
     display_name: str
     role: str
+    email: str
 
 
 class WifiProbingStartRequest(BaseModel):

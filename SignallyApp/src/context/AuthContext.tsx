@@ -8,6 +8,7 @@ export interface AuthUser {
   userId: number;
   displayName: string;
   role: ApiUserRole;
+  email: string;
 }
 
 interface AuthContextValue {
@@ -31,9 +32,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     SecureStore.getItemAsync(STORAGE_KEY).then((stored) => {
       if (!stored) return;
       try {
-        const { token: t, user_id, display_name, role } = JSON.parse(stored);
+        const { token: t, user_id, display_name, role, email } = JSON.parse(stored);
         setToken(t);
-        setUser({ userId: user_id, displayName: display_name, role });
+        setUser({ userId: user_id, displayName: display_name, role, email });
         setIsLoggedIn(true);
       } catch {
         SecureStore.deleteItemAsync(STORAGE_KEY);
@@ -44,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function login(response: ApiAuthResponse) {
     await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(response));
     setToken(response.token);
-    setUser({ userId: response.user_id, displayName: response.display_name, role: response.role });
+    setUser({ userId: response.user_id, displayName: response.display_name, role: response.role, email: response.email });
     setIsLoggedIn(true);
   }
 

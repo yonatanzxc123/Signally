@@ -16,6 +16,7 @@ export interface ApiAuthResponse {
   user_id: number;
   display_name: string;
   role: ApiUserRole;
+  email: string;
 }
 
 export interface ApiConnectedInspection {
