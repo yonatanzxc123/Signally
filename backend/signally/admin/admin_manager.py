@@ -33,12 +33,11 @@ class AdminManager:
     ) -> Device:
         self.user_service.require_admin(actor_role)
         device = self.device_service.update_status(mac_address, DeviceStatus.AUTHORIZED)
-        if owner_name:
-            _, device = self.user_service.create_user_for_device(
-                mac_address=device.mac_address,
-                display_name=owner_name,
-                role=owner_role,
-            )
+        _, device = self.user_service.create_user_for_device(
+            mac_address=device.mac_address,
+            display_name=owner_name or device.mac_address,
+            role=owner_role,
+        )
         self.event_service.log_event(
             event_type="DEVICE_APPROVED",
             details="Admin approved device",
