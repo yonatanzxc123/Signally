@@ -27,7 +27,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 export default function DevicesScreen({ navigation }: Props) {
-  const { devices, approveDevice, approveAllUnknownDevices, blockDevice, canManageDevices } = useDevices();
+  const { devices, approveDevice, approveAllUnknownDevices, blockDevice } = useDevices();
   const [filter, setFilter] = useState<Filter>('all');
 
   const unknownCount = devices.filter((d) => d.status === 'unknown').length;
@@ -42,7 +42,7 @@ export default function DevicesScreen({ navigation }: Props) {
             <Text style={styles.headerCountText}>{devices.length}</Text>
           </View>
         </View>
-        {unknownCount > 0 && canManageDevices && (
+        {unknownCount > 0 && (
           <TouchableOpacity
             style={styles.approveAllButton}
             onPress={approveAllUnknownDevices}
@@ -97,7 +97,6 @@ export default function DevicesScreen({ navigation }: Props) {
               device={device}
               onApprove={approveDevice}
               onBlock={blockDevice}
-              canManage={canManageDevices}
               onPress={(id) => navigation.navigate('DeviceDetail', { deviceId: id })}
             />
           ))

@@ -8,7 +8,7 @@ export const MOCK_DEVICES: Device[] = [
     ip: '192.168.1.101',
     status: 'approved',
     lastSeen: '2 min ago',
-    connected: true,
+    vendor: 'Apple',
   },
   {
     id: '2',
@@ -17,7 +17,7 @@ export const MOCK_DEVICES: Device[] = [
     ip: '192.168.1.102',
     status: 'approved',
     lastSeen: '5 min ago',
-    connected: true,
+    vendor: 'Apple',
   },
   {
     id: '3',
@@ -26,7 +26,7 @@ export const MOCK_DEVICES: Device[] = [
     ip: '192.168.1.118',
     status: 'unknown',
     lastSeen: 'Just now',
-    connected: true,
+    vendor: 'Unknown',
   },
   {
     id: '4',
@@ -35,7 +35,7 @@ export const MOCK_DEVICES: Device[] = [
     ip: '192.168.1.105',
     status: 'approved',
     lastSeen: '1 hour ago',
-    connected: true,
+    vendor: 'Samsung',
   },
   {
     id: '5',
@@ -44,7 +44,7 @@ export const MOCK_DEVICES: Device[] = [
     ip: '192.168.1.133',
     status: 'blocked',
     lastSeen: '3 hours ago',
-    connected: true,
+    vendor: 'Unknown',
   },
 ];
 

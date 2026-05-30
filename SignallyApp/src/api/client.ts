@@ -8,19 +8,6 @@ const BASE_URL =
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type BackendDeviceStatus = 'PENDING' | 'AUTHORIZED' | 'BLOCKED';
-export type ApiUserRole = 'ADMIN' | 'FAMILY' | 'GUEST';
-export type ApiSecurityMode = 'HOME' | 'AWAY';
-
-export interface ApiConnectedInspection {
-  device_category: string;
-  confidence: number;
-  hostname: string | null;
-  mdns_services: string[];
-  nmap_device_type: string | null;
-  nmap_os: string | null;
-  open_ports: string[];
-  signals: string[];
-}
 
 export interface ApiDevice {
   mac_address: string;
@@ -28,9 +15,6 @@ export interface ApiDevice {
   status: BackendDeviceStatus;
   first_seen: string;
   last_seen: string;
-  owner_user_id?: number | null;
-  owner_name?: string | null;
-  owner_role?: ApiUserRole | null;
 }
 
 export interface ApiEvent {
@@ -42,30 +26,16 @@ export interface ApiEvent {
 }
 
 export interface ApiSystemState {
-  security_mode: ApiSecurityMode;
-  security_mode_updated_by_role: ApiUserRole | 'SYSTEM' | null;
-  security_mode_updated_at: string | null;
   csi_presence_detected: boolean;
   approved_user_present: boolean;
-  admin_present: boolean;
-  family_present: boolean;
-  guest_present: boolean;
   decision: string;
   reason: string;
   present_devices: ApiDevice[];
-  current_intruder_count: number;
-  current_unknown_devices: ApiDevice[];
-  admin_review_grace_active: boolean;
-  notification_audience: ApiUserRole[];
 }
 
 export interface ApiMonitoringCycle {
-  security_mode: ApiSecurityMode;
   csi_presence_detected: boolean;
   approved_user_present: boolean;
-  admin_present: boolean;
-  family_present: boolean;
-  guest_present: boolean;
   decision: string;
   reason: string;
   processed_devices_count: number;
@@ -73,20 +43,18 @@ export interface ApiMonitoringCycle {
   authorized_devices_count: number;
   pending_devices_count: number;
   blocked_devices_count: number;
-  current_intruder_count: number;
-  admin_review_grace_active: boolean;
-  notification_audience: ApiUserRole[];
 }
 
 export interface ApiMessage {
   message: string;
 }
 
-export interface ApiSecurityModeState {
-  mode: ApiSecurityMode;
-  armed: boolean;
-  updated_by_role: ApiUserRole | 'SYSTEM';
-  updated_at: string;
+export interface ApiProbeInfo {
+  mac_address: string;
+  vendor: string | null;
+  known_ssids: string[];
+  latest_rssi: number | null;
+  is_nearby_only: boolean;
 }
 
 // ── Core fetch helper ──────────────────────────────────────────────────────
@@ -95,14 +63,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
   try {
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(options?.headers ?? {}),
-    };
     const res = await fetch(`${BASE_URL}${path}`, {
-      ...options,
-      headers,
+      headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
+      ...options,
     });
     if (!res.ok) {
       const body = await res.text();
@@ -114,41 +78,25 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
 }
 
-function roleHeaders(role: ApiUserRole): HeadersInit {
-  return { 'X-Signally-User-Role': role };
-}
-
 // ── API ────────────────────────────────────────────────────────────────────
 
 export const api = {
   // Devices
   getDevices: () => request<ApiDevice[]>('/devices'),
   getPendingDevices: () => request<ApiDevice[]>('/devices/pending'),
-  approveDevice: (mac: string, role: ApiUserRole = 'ADMIN') =>
-    request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/approve`, {
-      method: 'POST',
-      headers: roleHeaders(role),
-    }),
-  approveAllPendingDevices: (role: ApiUserRole = 'ADMIN') =>
-    request<ApiDevice[]>('/devices/approve-all', {
-      method: 'POST',
-      headers: roleHeaders(role),
-    }),
-  blockDevice: (mac: string, role: ApiUserRole = 'ADMIN') =>
-    request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/block`, {
-      method: 'POST',
-      headers: roleHeaders(role),
-    }),
+  approveDevice: (mac: string) =>
+    request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/approve`, { method: 'POST' }),
+  approveAllPendingDevices: () =>
+    request<ApiDevice[]>('/devices/approve-all', { method: 'POST' }),
+  blockDevice: (mac: string) =>
+    request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/block`, { method: 'POST' }),
   deleteDevice: (mac: string) =>
     request<ApiMessage>(`/devices/${encodeURIComponent(mac)}`, { method: 'DELETE' }),
 
   scanNetwork: () => request<ApiDevice[]>('/scan', { method: 'POST' }),
 
-  inspectDevice: (mac: string, role: ApiUserRole = 'ADMIN') =>
-    request<ApiConnectedInspection>(`/devices/${encodeURIComponent(mac)}/inspect`, {
-      method: 'POST',
-      headers: roleHeaders(role),
-    }),
+  getDeviceProbeInfo: (mac: string) =>
+    request<ApiProbeInfo>(`/probe-info/${encodeURIComponent(mac)}`),
 
   // Wifi Probing
   startWifiProbing: () => request<ApiMessage>('/wifi_probing/start', { method: 'POST' }),
@@ -160,13 +108,6 @@ export const api = {
   getEvents: (limit = 50) => request<ApiEvent[]>(`/events?limit=${limit}`),
 
   // System
-  getSecurityMode: () => request<ApiSecurityModeState>('/security-mode'),
-  setSecurityMode: (mode: ApiSecurityMode, role: ApiUserRole = 'ADMIN') =>
-    request<ApiSecurityModeState>('/security-mode', {
-      method: 'POST',
-      headers: roleHeaders(role),
-      body: JSON.stringify({ mode }),
-    }),
   getSystemState: () => request<ApiSystemState>('/system/state'),
   runMonitoringCycle: () =>
     request<ApiMonitoringCycle>('/monitoring/run-cycle', { method: 'POST' }),

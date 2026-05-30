@@ -3,13 +3,13 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, radius, font } from '../theme';
 import { Device } from '../types';
+import { useEvents } from '../context/EventsContext';
 
 interface Props {
   device: Device;
   onApprove: (id: string) => void;
   onBlock: (id: string) => void;
   onPress?: (id: string) => void;
-  canManage?: boolean;
 }
 
 type StatusConfig = {
@@ -40,8 +40,10 @@ const STATUS_CONFIG: Record<string, StatusConfig> = {
   },
 };
 
-export default function DeviceItem({ device, onApprove, onBlock, onPress, canManage = true }: Props) {
+export default function DeviceItem({ device, onApprove, onBlock, onPress }: Props) {
   const cfg = STATUS_CONFIG[device.status];
+  const { ssidsByMac } = useEvents();
+  const probedSsids = !device.ip ? (ssidsByMac[device.mac.toUpperCase()] ?? []) : [];
 
   return (
     <TouchableOpacity style={styles.card} onPress={() => onPress?.(device.id)} activeOpacity={onPress ? 0.7 : 1}>
@@ -51,9 +53,7 @@ export default function DeviceItem({ device, onApprove, onBlock, onPress, canMan
         </View>
         <View style={styles.info}>
           <Text style={styles.name}>{device.name}</Text>
-          <Text style={styles.mac}>
-            {device.mac}
-          </Text>
+          <Text style={styles.mac}>{device.mac}</Text>
           <View style={styles.metaRow}>
             <View style={[styles.connTag, device.ip ? styles.connTagConnected : styles.connTagNearby]}>
               <Ionicons
@@ -67,6 +67,11 @@ export default function DeviceItem({ device, onApprove, onBlock, onPress, canMan
             </View>
             <Text style={styles.meta}>{device.ip ?? '—'} · {device.lastSeen}</Text>
           </View>
+          {probedSsids.length > 0 && (
+            <Text style={styles.ssids} numberOfLines={1}>
+              Probing: {probedSsids.slice(0, 3).map(s => `"${s}"`).join(', ')}
+            </Text>
+          )}
         </View>
         <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
           <Ionicons name={cfg.icon} size={12} color={cfg.color} style={styles.badgeIcon} />
@@ -74,7 +79,7 @@ export default function DeviceItem({ device, onApprove, onBlock, onPress, canMan
         </View>
       </View>
 
-      {device.status === 'unknown' && canManage && (
+      {device.status === 'unknown' && (
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.btn, styles.btnApprove]}
@@ -161,6 +166,12 @@ const styles = StyleSheet.create({
   meta: {
     fontSize: font.sm,
     color: colors.textMuted,
+  },
+  ssids: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 2,
   },
   badge: {
     flexDirection: 'row',

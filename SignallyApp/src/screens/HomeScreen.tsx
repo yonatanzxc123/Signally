@@ -1,6 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  Animated,
   View,
   Text,
   ScrollView,
@@ -12,111 +11,33 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import StatusCard from '../components/StatusCard';
 import LogItem from '../components/LogItem';
 import { colors, spacing, radius, font } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { useDevices } from '../context/DevicesContext';
 import { useEvents } from '../context/EventsContext';
-import { api, ApiSecurityMode, ApiSystemState } from '../api/client';
+import { api } from '../api/client';
 
 export default function HomeScreen() {
-  const { logout, role } = useAuth();
+  const { logout } = useAuth();
   const { devices } = useDevices();
   const { events } = useEvents();
   const queryClient = useQueryClient();
   const [menuVisible, setMenuVisible] = useState(false);
-  const [modeControlWidth, setModeControlWidth] = useState(0);
-  const modeAnim = useRef(new Animated.Value(0)).current;
 
   const scanMutation = useMutation({
     mutationFn: api.runMonitoringCycle,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] });
       queryClient.invalidateQueries({ queryKey: ['events'] });
-      queryClient.invalidateQueries({ queryKey: ['system-state'] });
     },
-  });
-
-  const securityModeMutation = useMutation({
-    mutationFn: (mode: ApiSecurityMode) => api.setSecurityMode(mode, role),
-    onMutate: async (mode) => {
-      await queryClient.cancelQueries({ queryKey: ['system-state'] });
-      const snapshot = queryClient.getQueryData<ApiSystemState>(['system-state']);
-      const now = new Date().toISOString();
-      queryClient.setQueryData<ApiSystemState>(['system-state'], (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          security_mode: mode,
-          security_mode_updated_by_role: role,
-          security_mode_updated_at: now,
-          decision:
-            mode === 'HOME' && old.decision === 'ALERT'
-              ? 'HOME_REVIEW'
-              : old.decision,
-          reason:
-            mode === 'HOME' && old.decision === 'ALERT'
-              ? 'Home mode is active. Unknown activity is queued for review.'
-              : old.reason,
-        };
-      });
-      return snapshot;
-    },
-    onSuccess: (updated) => {
-      queryClient.setQueryData<ApiSystemState>(['system-state'], (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          security_mode: updated.mode,
-          security_mode_updated_by_role: updated.updated_by_role,
-          security_mode_updated_at: updated.updated_at,
-        };
-      });
-      queryClient.invalidateQueries({ queryKey: ['system-state'] });
-      queryClient.invalidateQueries({ queryKey: ['events'] });
-    },
-    onError: (_error, _mode, snapshot) => {
-      queryClient.setQueryData(['system-state'], snapshot);
-    },
-  });
-
-  const { data: systemState } = useQuery({
-    queryKey: ['system-state'],
-    queryFn: api.getSystemState,
-    refetchInterval: 5_000,
-    refetchIntervalInBackground: true,
-    retry: false,
   });
 
   const hasUnknown = devices.some((d) => d.status === 'unknown');
-  const shouldNotifyRole =
-    (systemState?.current_intruder_count ?? 0) > 0 &&
-    (systemState?.notification_audience ?? []).includes(role);
   const recentEvents = events.slice(0, 5);
   const scanning = scanMutation.isPending;
-  const securityMode = systemState?.security_mode ?? 'HOME';
-  const canChangeSecurityMode = role === 'ADMIN' || role === 'FAMILY';
-  const modeSegmentWidth = modeControlWidth > 0 ? (modeControlWidth - 8) / 2 : 0;
-
-  useEffect(() => {
-    Animated.timing(modeAnim, {
-      toValue: securityMode === 'AWAY' ? 1 : 0,
-      duration: 260,
-      useNativeDriver: false,
-    }).start();
-  }, [modeAnim, securityMode]);
-
-  const modeSliderTranslate = modeAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, modeSegmentWidth],
-  });
-
-  const modeSliderColor = modeAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [colors.accent, colors.secure],
-  });
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -163,87 +84,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        <StatusCard
-          hasUnknown={shouldNotifyRole || (!systemState && hasUnknown)}
-          deviceCount={devices.length}
-          securityMode={securityMode}
-        />
-
-        <View style={styles.modePanel}>
-          <View style={styles.modeHeader}>
-            <View style={styles.modeTitleWrap}>
-              <Text style={styles.modeTitle}>Security Mode</Text>
-              <Text style={styles.modeMeta}>
-                {securityMode === 'AWAY'
-                  ? 'Armed for unknown activity'
-                  : 'Relaxed for trusted presence'}
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.modeBadge,
-                securityMode === 'AWAY' ? styles.modeBadgeAway : styles.modeBadgeHome,
-              ]}
-            >
-              <Ionicons
-                name={securityMode === 'AWAY' ? 'lock-closed-outline' : 'home-outline'}
-                size={14}
-                color={securityMode === 'AWAY' ? colors.secure : colors.accent}
-              />
-              <Text
-                style={[
-                  styles.modeBadgeText,
-                  { color: securityMode === 'AWAY' ? colors.secure : colors.accent },
-                ]}
-              >
-                {securityMode}
-              </Text>
-            </View>
-          </View>
-
-          <View
-            style={styles.modeControls}
-            onLayout={(e) => setModeControlWidth(e.nativeEvent.layout.width)}
-          >
-            {modeSegmentWidth > 0 && (
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.modeSlider,
-                  {
-                    width: modeSegmentWidth,
-                    backgroundColor: modeSliderColor,
-                    transform: [{ translateX: modeSliderTranslate }],
-                  },
-                ]}
-              />
-            )}
-            {(['HOME', 'AWAY'] as const).map((mode) => {
-              const active = securityMode === mode;
-              return (
-                <TouchableOpacity
-                  key={mode}
-                  style={[
-                    styles.modeButton,
-                    !canChangeSecurityMode && styles.modeButtonDisabled,
-                  ]}
-                  disabled={!canChangeSecurityMode || active || securityModeMutation.isPending}
-                  onPress={() => securityModeMutation.mutate(mode)}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons
-                    name={mode === 'AWAY' ? 'shield-checkmark-outline' : 'home-outline'}
-                    size={16}
-                    color={active ? colors.surface : colors.textSecondary}
-                  />
-                  <Text style={[styles.modeButtonText, active && styles.modeButtonTextActive]}>
-                    {mode === 'AWAY' ? 'Away' : 'Home'}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
+        <StatusCard hasUnknown={hasUnknown} deviceCount={devices.length} />
 
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
@@ -367,99 +208,6 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.md,
     paddingBottom: spacing.xl,
-  },
-  modePanel: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  modeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  modeTitleWrap: {
-    flex: 1,
-  },
-  modeTitle: {
-    fontSize: font.lg,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  modeMeta: {
-    fontSize: font.sm,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  modeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
-  },
-  modeBadgeHome: {
-    backgroundColor: '#DBEAFE',
-  },
-  modeBadgeAway: {
-    backgroundColor: colors.secureLight,
-  },
-  modeBadgeText: {
-    fontSize: font.sm,
-    fontWeight: '800',
-  },
-  modeControls: {
-    flexDirection: 'row',
-    position: 'relative',
-    minHeight: 48,
-    borderRadius: radius.sm,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 4,
-    overflow: 'hidden',
-  },
-  modeSlider: {
-    position: 'absolute',
-    top: 4,
-    bottom: 4,
-    left: 4,
-    borderRadius: radius.sm - 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  modeButton: {
-    flex: 1,
-    minHeight: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    borderRadius: radius.sm,
-    zIndex: 1,
-  },
-  modeButtonDisabled: {
-    opacity: 0.5,
-  },
-  modeButtonText: {
-    fontSize: font.md,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  modeButtonTextActive: {
-    color: colors.surface,
   },
   statsRow: {
     flexDirection: 'row',

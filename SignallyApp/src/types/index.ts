@@ -14,7 +14,7 @@ export interface Device {
   ip: string | null;
   status: DeviceStatus;
   lastSeen: string;
-  connected: boolean;
+  vendor: string;
 }
 
 export interface NetworkEvent {

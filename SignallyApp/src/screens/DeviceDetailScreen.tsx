@@ -9,10 +9,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { DevicesStackParamList } from '../navigation/DevicesStack';
 import { useDevices } from '../context/DevicesContext';
-import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { colors, font, radius, spacing } from '../theme';
 
@@ -26,16 +25,14 @@ const STATUS_CONFIG = {
 
 export default function DeviceDetailScreen({ route, navigation }: Props) {
   const { deviceId } = route.params;
-  const { devices, approveDevice, blockDevice, canManageDevices } = useDevices();
-  const { role } = useAuth();
-  const queryClient = useQueryClient();
+  const { devices, approveDevice, blockDevice } = useDevices();
   const device = devices.find((d) => d.id === deviceId);
 
-  const inspectMutation = useMutation({
-    mutationFn: () => api.inspectDevice(deviceId, role),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['devices'] });
-    },
+  const { data: probeInfo } = useQuery({
+    queryKey: ['probeInfo', deviceId],
+    queryFn: () => api.getDeviceProbeInfo(deviceId),
+    retry: false,
+    enabled: !!device,
   });
 
   if (!device) {
@@ -68,6 +65,7 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
             <Ionicons name="phone-portrait-outline" size={36} color={cfg.color} />
           </View>
           <Text style={styles.heroName}>{device.name}</Text>
+          <Text style={styles.heroVendor}>{probeInfo?.vendor ?? device.vendor}</Text>
           <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
             <Ionicons name={cfg.icon} size={13} color={cfg.color} />
             <Text style={[styles.badgeText, { color: cfg.color }]}>{cfg.label}</Text>
@@ -84,23 +82,43 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
           <Text style={styles.sectionTitle}>Network Info</Text>
           <InfoRow icon="hardware-chip-outline" label="MAC Address" value={device.mac} mono />
           <InfoRow icon="globe-outline" label="IP Address" value={device.ip || '—'} mono />
+          <InfoRow icon="business-outline" label="Manufacturer" value={probeInfo?.vendor ?? device.vendor} />
           <InfoRow icon="time-outline" label="Last Seen" value={device.lastSeen} />
         </View>
 
-        {device.ip && canManageDevices && (
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: '#EFF6FF' }]}
-            onPress={() => inspectMutation.mutate()}
-            disabled={inspectMutation.isPending}
-          >
-            <Ionicons name="search-outline" size={20} color={colors.accent} />
-            <Text style={[styles.actionBtnText, { color: colors.accent }]}>
-              {inspectMutation.isPending ? 'Inspecting...' : 'Inspect Connected Device'}
-            </Text>
-          </TouchableOpacity>
+        {probeInfo && (probeInfo.known_ssids.length > 0 || probeInfo.latest_rssi != null) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Probe Details</Text>
+            {probeInfo.latest_rssi != null && (
+              <InfoRow
+                icon="wifi-outline"
+                label="Signal Strength"
+                value={
+                  probeInfo.latest_rssi >= -60
+                    ? `Strong (${probeInfo.latest_rssi} dBm)`
+                    : probeInfo.latest_rssi >= -75
+                    ? `Medium (${probeInfo.latest_rssi} dBm)`
+                    : `Weak (${probeInfo.latest_rssi} dBm)`
+                }
+              />
+            )}
+            {probeInfo.known_ssids.length > 0 && (
+              <View style={styles.ssidsContainer}>
+                <Text style={styles.ssidsLabel}>Known Networks</Text>
+                <View style={styles.ssidsList}>
+                  {probeInfo.known_ssids.map((ssid) => (
+                    <View key={ssid} style={styles.ssidChip}>
+                      <Ionicons name="wifi" size={12} color={colors.accent} />
+                      <Text style={styles.ssidChipText}>{ssid}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
         )}
 
-        {device.status !== 'approved' && canManageDevices && (
+        {device.status !== 'approved' && (
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: colors.approvedLight }]}
             onPress={() => { approveDevice(device.id); navigation.goBack(); }}
@@ -110,7 +128,7 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
           </TouchableOpacity>
         )}
 
-        {device.status !== 'blocked' && canManageDevices && (
+        {device.status !== 'blocked' && (
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: colors.blockedLight }]}
             onPress={() => { blockDevice(device.id); navigation.goBack(); }}
@@ -199,6 +217,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textPrimary,
   },
+  heroVendor: {
+    fontSize: font.md,
+    color: colors.textSecondary,
+  },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -281,5 +303,32 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     color: colors.textMuted,
     fontSize: font.lg,
+  },
+  ssidsContainer: {
+    paddingVertical: spacing.sm,
+  },
+  ssidsLabel: {
+    fontSize: font.sm,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  ssidsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  ssidChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  ssidChipText: {
+    fontSize: font.sm,
+    color: colors.accent,
+    fontWeight: '500',
   },
 });
