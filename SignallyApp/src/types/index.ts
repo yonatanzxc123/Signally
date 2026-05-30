@@ -14,12 +14,7 @@ export interface Device {
   ip: string | null;
   status: DeviceStatus;
   lastSeen: string;
-  category: string;
-  confidence: number;
-  randomizedMac: boolean;
-  primaryLayer: string;
   connected: boolean;
-  fingerprintSignals: string[];
 }
 
 export interface NetworkEvent {

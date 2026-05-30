@@ -11,17 +11,6 @@ export type BackendDeviceStatus = 'PENDING' | 'AUTHORIZED' | 'BLOCKED';
 export type ApiUserRole = 'ADMIN' | 'FAMILY' | 'GUEST';
 export type ApiSecurityMode = 'HOME' | 'AWAY';
 
-export interface ApiDeviceFingerprint {
-  device_category: string;
-  display_name: string;
-  confidence: number;
-  hostname: string | null;
-  randomized_mac: boolean;
-  primary_layer: string;
-  connected: boolean;
-  signals: string[];
-}
-
 export interface ApiConnectedInspection {
   device_category: string;
   confidence: number;
@@ -42,7 +31,6 @@ export interface ApiDevice {
   owner_user_id?: number | null;
   owner_name?: string | null;
   owner_role?: ApiUserRole | null;
-  fingerprint?: ApiDeviceFingerprint | null;
 }
 
 export interface ApiEvent {
@@ -167,8 +155,6 @@ export const api = {
 
   getDeviceProbeInfo: (mac: string) =>
     request<ApiProbeInfo>(`/probe-info/${encodeURIComponent(mac)}`),
-  getDeviceFingerprint: (mac: string) =>
-    request<ApiDeviceFingerprint>(`/devices/${encodeURIComponent(mac)}/fingerprint`),
   inspectDevice: (mac: string, role: ApiUserRole = 'ADMIN') =>
     request<ApiConnectedInspection>(`/devices/${encodeURIComponent(mac)}/inspect`, {
       method: 'POST',

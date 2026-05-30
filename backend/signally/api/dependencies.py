@@ -11,7 +11,6 @@ from signally.services.alert_service import AlertService
 from signally.services.correlation_service import CorrelationService
 from signally.services.device_service import DeviceService
 from signally.services.event_service import EventService
-from signally.services.fingerprint_service import FingerprintService
 from signally.services.presence_service import PresenceService
 from signally.services.security_mode_service import SecurityModeService
 from signally.services.user_service import UserService
@@ -31,7 +30,6 @@ def build_services(session: Session) -> dict:
     event_service = EventService(session)
     device_service = DeviceService(session)
     user_service = UserService(session)
-    fingerprint_service = FingerprintService(session)
     presence_service = PresenceService(session)
     security_mode_service = SecurityModeService(session)
     correlation_service = CorrelationService()
@@ -44,7 +42,6 @@ def build_services(session: Session) -> dict:
         "presence_service": presence_service,
         "security_mode_service": security_mode_service,
         "user_service": user_service,
-        "fingerprint_service": fingerprint_service,
         "correlation_service": correlation_service,
         "alert_service": alert_service,
         "admin_manager": admin_manager,
