@@ -43,14 +43,24 @@ export default function DevicesScreen({ navigation }: Props) {
           </View>
         </View>
         {unknownCount > 0 && canManageDevices && (
-          <TouchableOpacity
-            style={styles.approveAllButton}
-            onPress={approveAllUnknownDevices}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="checkmark-done-circle-outline" size={18} color={colors.surface} />
-            <Text style={styles.approveAllText}>Approve All</Text>
-          </TouchableOpacity>
+          <View style={styles.approveAllRow}>
+            <TouchableOpacity
+              style={[styles.approveAllButton, { backgroundColor: colors.approved }]}
+              onPress={() => approveAllUnknownDevices('FAMILY')}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="people-outline" size={14} color={colors.surface} />
+              <Text style={styles.approveAllText}>All Family</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.approveAllButton, { backgroundColor: colors.accent }]}
+              onPress={() => approveAllUnknownDevices('GUEST')}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="person-add-outline" size={14} color={colors.surface} />
+              <Text style={styles.approveAllText}>All Guest</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -144,6 +154,10 @@ const styles = StyleSheet.create({
     color: colors.surface,
     fontSize: font.sm,
     fontWeight: '700',
+  },
+  approveAllRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
   },
   approveAllButton: {
     flexDirection: 'row',

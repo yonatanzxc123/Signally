@@ -48,6 +48,7 @@ class AdminManager:
 
     def approve_all_pending_devices(
         self,
+        owner_role: UserRole | str,
         actor_role: UserRole | str = UserRole.ADMIN,
     ) -> list[Device]:
         self.user_service.require_admin(actor_role)
@@ -56,6 +57,11 @@ class AdminManager:
         for device in devices:
             device.status = DeviceStatus.AUTHORIZED
             device.last_seen = utc_now()
+            self.user_service.create_user_for_device(
+                mac_address=device.mac_address,
+                display_name=device.mac_address,
+                role=owner_role,
+            )
             self.event_service.log_event(
                 event_type="DEVICE_APPROVED",
                 details="Admin approved device via bulk action",

@@ -144,10 +144,11 @@ export const api = {
       headers: roleHeaders(role),
       body: JSON.stringify({ owner_role: ownerRole }),
     }),
-  approveAllPendingDevices: (role: ApiUserRole = 'ADMIN') =>
+  approveAllPendingDevices: (ownerRole: 'FAMILY' | 'GUEST', role: ApiUserRole = 'ADMIN') =>
     request<ApiDevice[]>('/devices/approve-all', {
       method: 'POST',
       headers: roleHeaders(role),
+      body: JSON.stringify({ owner_role: ownerRole }),
     }),
   blockDevice: (mac: string, role: ApiUserRole = 'ADMIN') =>
     request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/block`, {

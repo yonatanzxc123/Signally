@@ -342,13 +342,21 @@ def list_pending_devices():
 
 @app.post("/devices/approve-all", response_model=list[DeviceResponse])
 def approve_all_pending_devices(
+    request: ApproveDeviceRequest,
     x_signally_user_role: Optional[str] = Header(default=None),
 ):
+    try:
+        owner_role = UserRole(request.owner_role.upper())
+        if owner_role not in (UserRole.FAMILY, UserRole.GUEST):
+            raise ValueError()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Role must be FAMILY or GUEST")
     session = get_db_session()
     try:
         services = build_services(session)
         try:
             devices = services["admin_manager"].approve_all_pending_devices(
+                owner_role=owner_role,
                 actor_role=parse_actor_role(x_signally_user_role),
             )
         except PermissionError as exc:

@@ -6,7 +6,7 @@ import { Device } from '../types';
 
 interface Props {
   device: Device;
-  onApprove: (id: string) => void;
+  onApprove: (id: string, ownerRole: 'FAMILY' | 'GUEST') => void;
   onBlock: (id: string) => void;
   onPress?: (id: string) => void;
   canManage?: boolean;
@@ -78,10 +78,17 @@ export default function DeviceItem({ device, onApprove, onBlock, onPress, canMan
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.btn, styles.btnApprove]}
-            onPress={() => onApprove(device.id)}
+            onPress={() => onApprove(device.id, 'FAMILY')}
           >
-            <Ionicons name="checkmark" size={14} color={colors.approved} />
-            <Text style={[styles.btnText, { color: colors.approved }]}>Approve</Text>
+            <Ionicons name="people-outline" size={14} color={colors.approved} />
+            <Text style={[styles.btnText, { color: colors.approved }]}>Family</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.btn, { backgroundColor: '#EFF6FF' }]}
+            onPress={() => onApprove(device.id, 'GUEST')}
+          >
+            <Ionicons name="person-add-outline" size={14} color={colors.accent} />
+            <Text style={[styles.btnText, { color: colors.accent }]}>Guest</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.btn, styles.btnBlock]}
