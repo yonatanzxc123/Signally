@@ -2,15 +2,20 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from signally.config import JWT_ALGORITHM, JWT_EXPIRE_HOURS, JWT_SECRET
 from signally.models.user import User, UserRole
 
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def _hash(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+def _verify(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
 class AuthService:
@@ -24,7 +29,7 @@ class AuthService:
         user = User(
             display_name=display_name.strip(),
             email=normalized,
-            password_hash=_pwd.hash(password),
+            password_hash=_hash(password),
             role=role,
         )
         self.session.add(user)
@@ -34,7 +39,7 @@ class AuthService:
 
     def login(self, email: str, password: str) -> dict:
         user = self.session.scalar(select(User).where(User.email == email.lower().strip()))
-        if not user or not _pwd.verify(password, user.password_hash):
+        if not user or not _verify(password, user.password_hash):
             raise ValueError("Invalid email or password")
         return _make_token_response(user)
 
