@@ -113,7 +113,13 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     });
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`API ${res.status}: ${body}`);
+      try {
+        const parsed = JSON.parse(body);
+        throw new Error(parsed.detail ?? body);
+      } catch (e) {
+        if (e instanceof SyntaxError) throw new Error(body);
+        throw e;
+      }
     }
     return res.json() as Promise<T>;
   } finally {
