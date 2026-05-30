@@ -65,7 +65,6 @@ class SystemStateResponse(BaseModel):
     present_devices: list[DeviceResponse]
     current_intruder_count: int = 0
     current_unknown_devices: list[DeviceResponse] = []
-    ignored_authorized_duplicate_count: int = 0
     admin_review_grace_active: bool = False
     notification_audience: list[str] = []
 
@@ -84,7 +83,6 @@ class MonitoringCycleResponse(BaseModel):
     pending_devices_count: int
     blocked_devices_count: int
     current_intruder_count: int = 0
-    ignored_authorized_duplicate_count: int = 0
     admin_review_grace_active: bool = False
     notification_audience: list[str] = []
 

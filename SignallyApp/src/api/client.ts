@@ -55,7 +55,6 @@ export interface ApiSystemState {
   present_devices: ApiDevice[];
   current_intruder_count: number;
   current_unknown_devices: ApiDevice[];
-  ignored_authorized_duplicate_count: number;
   admin_review_grace_active: boolean;
   notification_audience: ApiUserRole[];
 }
@@ -75,7 +74,6 @@ export interface ApiMonitoringCycle {
   pending_devices_count: number;
   blocked_devices_count: number;
   current_intruder_count: number;
-  ignored_authorized_duplicate_count: number;
   admin_review_grace_active: boolean;
   notification_audience: ApiUserRole[];
 }

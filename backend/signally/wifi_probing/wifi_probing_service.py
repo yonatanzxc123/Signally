@@ -151,12 +151,8 @@ class WifiProbingService:
         unknown_nearby = [d for d in devices if d.status == DeviceStatus.PENDING]
         blocked_nearby = [d for d in devices if d.status == DeviceStatus.BLOCKED]
 
-        duplicate_allowance = len(connected_presence.authorised_connected_devices)
-        ignored_duplicate_count = min(len(unknown_nearby), duplicate_allowance)
-        effective_unknown = unknown_nearby[ignored_duplicate_count:]
-
         first_unknown_seen_at = None
-        for device in effective_unknown:
+        for device in unknown_nearby:
             event_time = first_seen_by_mac.get(device.mac_address)
             if event_time is None:
                 continue
@@ -167,8 +163,6 @@ class WifiProbingService:
             nearby_devices=devices,
             unknown_nearby_devices=unknown_nearby,
             blocked_nearby_devices=blocked_nearby,
-            effective_unknown_nearby_devices=effective_unknown,
-            ignored_authorized_duplicate_count=ignored_duplicate_count,
             first_unknown_seen_at=first_unknown_seen_at,
             window_seconds=window_seconds,
         )

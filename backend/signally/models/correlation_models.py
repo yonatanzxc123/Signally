@@ -42,14 +42,8 @@ class NearbyPresenceSnapshot:
     nearby_devices: List[Device] = field(default_factory=list)
     unknown_nearby_devices: List[Device] = field(default_factory=list)
     blocked_nearby_devices: List[Device] = field(default_factory=list)
-    effective_unknown_nearby_devices: List[Device] = field(default_factory=list)
-    ignored_authorized_duplicate_count: int = 0
     first_unknown_seen_at: Optional[datetime] = None
     window_seconds: int = 30
-
-    @property
-    def effective_unknown_nearby_count(self) -> int:
-        return len(self.effective_unknown_nearby_devices)
 
 
 @dataclass
@@ -74,6 +68,5 @@ class CorrelationDecision:
     family_present: bool = False
     guest_present: bool = False
     current_intruder_count: int = 0
-    ignored_authorized_duplicate_count: int = 0
     admin_review_grace_active: bool = False
     notification_audience: List[str] = field(default_factory=list)

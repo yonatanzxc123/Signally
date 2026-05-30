@@ -176,7 +176,7 @@ def parse_actor_role(value: Optional[str]) -> UserRole:
 def select_current_unknown_devices(connected_presence, nearby_presence):
     if connected_presence.pending_connected_devices:
         return connected_presence.pending_connected_devices
-    return nearby_presence.effective_unknown_nearby_devices
+    return nearby_presence.unknown_nearby_devices
 
 
 
@@ -735,7 +735,6 @@ def get_system_state():
                 )
                 for d in select_current_unknown_devices(connected_presence, nearby_presence)
             ],
-            ignored_authorized_duplicate_count=decision.ignored_authorized_duplicate_count,
             admin_review_grace_active=decision.admin_review_grace_active,
             notification_audience=decision.notification_audience,
         )
@@ -784,7 +783,6 @@ def run_monitoring_cycle():
             pending_devices_count=len(connected_presence.pending_connected_devices),
             blocked_devices_count=len(connected_presence.blocked_connected_devices),
             current_intruder_count=decision.current_intruder_count,
-            ignored_authorized_duplicate_count=decision.ignored_authorized_duplicate_count,
             admin_review_grace_active=decision.admin_review_grace_active,
             notification_audience=decision.notification_audience,
         )

@@ -201,8 +201,6 @@ def test_authorized_arp_phone_suppresses_one_randomized_probe_duplicate(monkeypa
     nearby_presence = wifi_service.get_presence_snapshot(connected_presence)
 
     assert len(nearby_presence.unknown_nearby_devices) == 1
-    assert nearby_presence.ignored_authorized_duplicate_count == 1
-    assert nearby_presence.effective_unknown_nearby_count == 0
 
 
 def test_reset_database_content_deletes_users_and_device_owners():

@@ -28,7 +28,7 @@ class CorrelationService:
         away_mode = security_mode == SecurityMode.AWAY
         current_intruder_count = max(
             len(context.connected_presence.pending_connected_devices),
-            context.nearby_presence.effective_unknown_nearby_count,
+            len(context.nearby_presence.unknown_nearby_devices),
         )
         review_grace_active = self._is_admin_review_grace_active(context)
 
@@ -46,7 +46,6 @@ class CorrelationService:
                 family_present=family_present,
                 guest_present=guest_present,
                 current_intruder_count=max(1, current_intruder_count),
-                ignored_authorized_duplicate_count=context.nearby_presence.ignored_authorized_duplicate_count,
                 notification_audience=["ADMIN", "FAMILY"],
             )
 
@@ -65,7 +64,6 @@ class CorrelationService:
                 family_present=family_present,
                 guest_present=guest_present,
                 current_intruder_count=current_intruder_count,
-                ignored_authorized_duplicate_count=context.nearby_presence.ignored_authorized_duplicate_count,
                 admin_review_grace_active=review_grace_active,
                 notification_audience=audience,
             )
@@ -84,7 +82,6 @@ class CorrelationService:
                 family_present=family_present,
                 guest_present=guest_present,
                 current_intruder_count=current_intruder_count,
-                ignored_authorized_duplicate_count=context.nearby_presence.ignored_authorized_duplicate_count,
                 admin_review_grace_active=True,
                 notification_audience=["ADMIN"],
             )
@@ -103,7 +100,6 @@ class CorrelationService:
                 family_present=family_present,
                 guest_present=guest_present,
                 current_intruder_count=current_intruder_count,
-                ignored_authorized_duplicate_count=context.nearby_presence.ignored_authorized_duplicate_count,
                 notification_audience=["ADMIN", "FAMILY"],
             )
 
@@ -120,7 +116,6 @@ class CorrelationService:
                 admin_present=admin_present,
                 family_present=family_present,
                 guest_present=guest_present,
-                ignored_authorized_duplicate_count=context.nearby_presence.ignored_authorized_duplicate_count,
             )
 
         # 6. AWAY ALERT: CSI motion + NO authorized phone connected
@@ -139,7 +134,6 @@ class CorrelationService:
                 family_present=family_present,
                 guest_present=guest_present,
                 current_intruder_count=1,
-                ignored_authorized_duplicate_count=context.nearby_presence.ignored_authorized_duplicate_count,
                 notification_audience=["ADMIN", "FAMILY"],
             )
 
@@ -156,7 +150,6 @@ class CorrelationService:
                 admin_present=admin_present,
                 family_present=family_present,
                 guest_present=guest_present,
-                ignored_authorized_duplicate_count=context.nearby_presence.ignored_authorized_duplicate_count,
             )
 
         # 8. IDLE: No unresolved current unknowns and no CSI motion.
