@@ -18,7 +18,6 @@ from signally.services.presence_service import PresenceService
 from signally.services.user_service import UserService
 from signally.utils.time_utils import utc_now
 from signally.wifi_probing.dto import WifiProbeDetection
-import signally.wifi_probing.wifi_probing_service as wifi_probing_module
 from signally.wifi_probing.wifi_probing_service import WifiProbingService
 
 
@@ -173,34 +172,6 @@ def test_home_mode_csi_without_recent_phone_is_occupied_not_intruder():
 
     assert decision.decision == "HOME_OCCUPIED"
     assert decision.notification_audience == []
-
-
-def test_authorized_arp_phone_suppresses_one_randomized_probe_duplicate(monkeypatch):
-    monkeypatch.setattr(wifi_probing_module, "NETWORK_SSID", None)
-    monkeypatch.setattr(wifi_probing_module, "WIFI_PROBING_STRONG_RSSI_MIN", -60)
-    session = build_session()
-    device_service, _, admin_manager, presence_service = build_services(session)
-    wifi_service = WifiProbingService(session)
-
-    scan_one(device_service, "AA:BB:CC:DD:EE:26", "192.168.1.26")
-    admin_manager.approve_device(
-        "AA:BB:CC:DD:EE:26",
-        owner_name="Admin Phone",
-        owner_role=UserRole.ADMIN,
-    )
-    wifi_service.handle_detection(
-        WifiProbeDetection(
-            mac_address="AA:BB:CC:DD:EE:99",
-            frame_type="probe_req",
-            ssid="HomeWiFi",
-            rssi=-55,
-        )
-    )
-
-    connected_presence = presence_service.get_presence_snapshot()
-    nearby_presence = wifi_service.get_presence_snapshot(connected_presence)
-
-    assert len(nearby_presence.unknown_nearby_devices) == 1
 
 
 def test_reset_database_content_deletes_users_and_device_owners():

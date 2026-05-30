@@ -124,13 +124,6 @@ class SetSecurityModeRequest(BaseModel):
     mode: str
 
 
-class ProbeInfoResponse(BaseModel):
-    mac_address: str
-    known_ssids: list[str]
-    latest_rssi: Optional[int] = None
-    is_nearby_only: bool
-
-
 class WifiProbingStartRequest(BaseModel):
     interface: Optional[str] = None
     mock_mode: bool = False

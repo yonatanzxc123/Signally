@@ -89,13 +89,6 @@ export interface ApiSecurityModeState {
   updated_at: string;
 }
 
-export interface ApiProbeInfo {
-  mac_address: string;
-  known_ssids: string[];
-  latest_rssi: number | null;
-  is_nearby_only: boolean;
-}
-
 // ── Core fetch helper ──────────────────────────────────────────────────────
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -151,8 +144,6 @@ export const api = {
 
   scanNetwork: () => request<ApiDevice[]>('/scan', { method: 'POST' }),
 
-  getDeviceProbeInfo: (mac: string) =>
-    request<ApiProbeInfo>(`/probe-info/${encodeURIComponent(mac)}`),
   inspectDevice: (mac: string, role: ApiUserRole = 'ADMIN') =>
     request<ApiConnectedInspection>(`/devices/${encodeURIComponent(mac)}/inspect`, {
       method: 'POST',
