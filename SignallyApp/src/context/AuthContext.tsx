@@ -1,33 +1,70 @@
-import React, { createContext, useContext, useState } from 'react';
-import { ApiUserRole } from '../api/client';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import * as SecureStore from 'expo-secure-store';
+import { ApiAuthResponse, ApiUserRole } from '../api/client';
+
+const STORAGE_KEY = 'signally_auth';
+
+export interface AuthUser {
+  userId: number;
+  displayName: string;
+  role: ApiUserRole;
+}
 
 interface AuthContextValue {
   isLoggedIn: boolean;
+  user: AuthUser | null;
   role: ApiUserRole;
   isAdmin: boolean;
-  login: (role?: ApiUserRole) => void;
-  logout: () => void;
+  token: string | null;
+  login: (response: ApiAuthResponse) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // TODO: on mount, read JWT from SecureStore; if valid, restore login and role.
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [role, setRole] = useState<ApiUserRole>('ADMIN');
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    SecureStore.getItemAsync(STORAGE_KEY).then((stored) => {
+      if (!stored) return;
+      try {
+        const { token: t, user_id, display_name, role } = JSON.parse(stored);
+        setToken(t);
+        setUser({ userId: user_id, displayName: display_name, role });
+        setIsLoggedIn(true);
+      } catch {
+        SecureStore.deleteItemAsync(STORAGE_KEY);
+      }
+    });
+  }, []);
+
+  async function login(response: ApiAuthResponse) {
+    await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(response));
+    setToken(response.token);
+    setUser({ userId: response.user_id, displayName: response.display_name, role: response.role });
+    setIsLoggedIn(true);
+  }
+
+  async function logout() {
+    await SecureStore.deleteItemAsync(STORAGE_KEY);
+    setToken(null);
+    setUser(null);
+    setIsLoggedIn(false);
+  }
 
   return (
     <AuthContext.Provider
       value={{
         isLoggedIn,
-        role,
-        isAdmin: role === 'ADMIN',
-        // TODO: store JWT in SecureStore on login, clear it on logout.
-        login: (nextRole = 'ADMIN') => {
-          setRole(nextRole);
-          setIsLoggedIn(true);
-        },
-        logout: () => setIsLoggedIn(false),
+        user,
+        role: user?.role ?? 'ADMIN',
+        isAdmin: user?.role === 'ADMIN',
+        token,
+        login,
+        logout,
       }}
     >
       {children}

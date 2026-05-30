@@ -22,7 +22,7 @@ function Root() {
           <AppNavigator />
         </NavigationContainer>
       ) : (
-        <AuthScreen onAuth={login} />
+        <AuthScreen onAuth={(response) => login(response)} />
       )}
     </>
   );

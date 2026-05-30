@@ -14,6 +14,11 @@ import os
 # Database
 DATABASE_URL = os.getenv("SIGNALLY_DATABASE_URL", "sqlite:///signally.db")
 
+# Auth / JWT
+JWT_SECRET = os.getenv("SIGNALLY_JWT_SECRET", "dev-secret-change-in-production")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_HOURS = int(os.getenv("SIGNALLY_JWT_EXPIRE_HOURS", "168"))  # 7 days
+
 #  ARP scanning
 DEFAULT_SCAN_TARGET = os.getenv("SIGNALLY_DEFAULT_SCAN_TARGET", "192.168.1.0/24")
 DEFAULT_SCAN_TIMEOUT = int(os.getenv("SIGNALLY_DEFAULT_SCAN_TIMEOUT", "2"))

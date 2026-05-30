@@ -33,13 +33,16 @@ from signally.models.correlation_models import CorrelationContext
 from signally.api.schemas import (
     ApproveDeviceRequest,
     AssignDeviceRequest,
+    AuthResponse,
     ConnectedInspectionResponse,
     DeviceResponse,
     EventResponse,
+    LoginRequest,
     MessageResponse,
     SetCsiPresenceRequest,
     SetSecurityModeRequest,
     SecurityModeResponse,
+    SignupRequest,
     WifiProbingStartRequest,
     WifiProbingStatusResponse,
     SystemStateResponse,
@@ -207,6 +210,47 @@ def on_startup() -> None:
 @app.get("/health", response_model=MessageResponse)
 def health() -> MessageResponse:
     return MessageResponse(message="Signally API is running.")
+
+
+@app.post("/auth/signup", response_model=AuthResponse)
+def signup(request: SignupRequest):
+    if request.password != request.confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+    if len(request.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    try:
+        role = UserRole(request.role.upper())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    if role == UserRole.GUEST:
+        raise HTTPException(status_code=400, detail="Cannot sign up as guest")
+    session = get_db_session()
+    try:
+        from signally.services.auth_service import AuthService
+        try:
+            return AuthService(session).signup(
+                display_name=request.display_name,
+                email=request.email,
+                password=request.password,
+                role=role,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+    finally:
+        session.close()
+
+
+@app.post("/auth/login", response_model=AuthResponse)
+def login(request: LoginRequest):
+    session = get_db_session()
+    try:
+        from signally.services.auth_service import AuthService
+        try:
+            return AuthService(session).login(email=request.email, password=request.password)
+        except ValueError as exc:
+            raise HTTPException(status_code=401, detail=str(exc))
+    finally:
+        session.close()
 
 
 @app.get("/security-mode", response_model=SecurityModeResponse)

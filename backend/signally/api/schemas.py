@@ -124,6 +124,26 @@ class SetSecurityModeRequest(BaseModel):
     mode: str
 
 
+class SignupRequest(BaseModel):
+    display_name: str
+    email: str
+    password: str
+    confirm_password: str
+    role: str = "ADMIN"
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user_id: int
+    display_name: str
+    role: str
+
+
 class WifiProbingStartRequest(BaseModel):
     interface: Optional[str] = None
     mock_mode: bool = False

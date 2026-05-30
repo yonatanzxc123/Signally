@@ -11,6 +11,13 @@ export type BackendDeviceStatus = 'PENDING' | 'AUTHORIZED' | 'BLOCKED';
 export type ApiUserRole = 'ADMIN' | 'FAMILY' | 'GUEST';
 export type ApiSecurityMode = 'HOME' | 'AWAY';
 
+export interface ApiAuthResponse {
+  token: string;
+  user_id: number;
+  display_name: string;
+  role: ApiUserRole;
+}
+
 export interface ApiConnectedInspection {
   device_category: string;
   confidence: number;
@@ -175,4 +182,10 @@ export const api = {
   clearAllDevices: () => request<ApiMessage>('/admin/devices', { method: 'DELETE' }),
   clearAllEvents: () => request<ApiMessage>('/admin/events', { method: 'DELETE' }),
   resetDatabase: () => request<ApiMessage>('/admin/reset', { method: 'DELETE' }),
+
+  // Auth
+  signup: (body: { display_name: string; email: string; password: string; confirm_password: string; role: ApiUserRole }) =>
+    request<ApiAuthResponse>('/auth/signup', { method: 'POST', body: JSON.stringify(body) }),
+  login: (body: { email: string; password: string }) =>
+    request<ApiAuthResponse>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
 };
