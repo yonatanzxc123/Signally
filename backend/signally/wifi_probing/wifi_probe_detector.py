@@ -5,6 +5,8 @@ Scapy-based 802.11 management-frame detector with optional mock mode.
 from __future__ import annotations
 
 import queue
+import re
+import subprocess
 import threading
 import time
 from typing import Callable, Optional
@@ -12,6 +14,10 @@ from typing import Callable, Optional
 from scapy.all import AsyncSniffer  # type: ignore
 from scapy.layers.dot11 import Dot11, Dot11Elt  # type: ignore
 
+from signally.config import (
+    WIFI_PROBING_AUTO_MATCH_CHANNEL,
+    WIFI_PROBING_FOLLOW_INTERFACE,
+)
 from signally.wifi_probing.dto import WifiProbeDetection
 
 _MANAGEMENT_SUBTYPES = {
@@ -61,6 +67,8 @@ class WifiProbeDetector:
         if not self.interface:
             raise ValueError("A monitor-mode interface is required for real Wi-Fi probing")
 
+        self._match_connected_wifi_channel()
+
         self._sniffer = AsyncSniffer(
             iface=self.interface,
             store=False,
@@ -75,6 +83,56 @@ class WifiProbeDetector:
             if self._sniffer is not None and self._sniffer.running:
                 self._sniffer.stop(join=True)
             self._sniffer = None
+
+    def _match_connected_wifi_channel(self) -> None:
+        if not WIFI_PROBING_AUTO_MATCH_CHANNEL or not WIFI_PROBING_FOLLOW_INTERFACE:
+            return
+
+        channel = self._read_interface_channel(WIFI_PROBING_FOLLOW_INTERFACE)
+        if channel is None:
+            return
+
+        try:
+            subprocess.run(
+                ["iw", "dev", self.interface, "set", "channel", str(channel)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            print(
+                "[WIFI_PROBING] Matched {0} to {1} channel {2}.".format(
+                    self.interface,
+                    WIFI_PROBING_FOLLOW_INTERFACE,
+                    channel,
+                )
+            )
+        except (OSError, subprocess.CalledProcessError) as exc:
+            print(
+                "[WIFI_PROBING] Could not match {0} to {1} channel: {2}".format(
+                    self.interface,
+                    WIFI_PROBING_FOLLOW_INTERFACE,
+                    exc,
+                )
+            )
+
+    def _read_interface_channel(self, interface: str) -> Optional[int]:
+        try:
+            result = subprocess.run(
+                ["iw", "dev", interface, "info"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except (OSError, subprocess.CalledProcessError) as exc:
+            print("[WIFI_PROBING] Could not read {0} channel: {1}".format(interface, exc))
+            return None
+
+        match = re.search(r"\bchannel\s+(\d+)\b", result.stdout)
+        if not match:
+            print("[WIFI_PROBING] No channel found for {0}.".format(interface))
+            return None
+
+        return int(match.group(1))
 
     def _run_mock(
         self,

@@ -18,6 +18,7 @@ from signally.config import (
     EVENT_WIFI_PROBING_ERROR,
     EVENT_WIFI_PROBING_STARTED,
     EVENT_WIFI_PROBING_STOPPED,
+    WIFI_PROBING_ALLOW_MISSING_RSSI,
     WIFI_PROBING_RECENT_EVENT_LIMIT,
     WIFI_PROBING_STRONG_RSSI_MIN,
 )
@@ -26,6 +27,8 @@ from signally.services.event_service import EventService
 from signally.utils.time_utils import utc_now
 from signally.wifi_probing.dto import WifiProbeDetection
 
+_CLIENT_ACTIVITY_FRAME_TYPES = {"probe_req", "assoc_req", "reassoc_req", "auth"}
+
 
 class WifiProbingService:
     def __init__(self, session: Session) -> None:
@@ -33,6 +36,8 @@ class WifiProbingService:
         self.event_service = EventService(session)
 
     def handle_detection(self, detection: WifiProbeDetection) -> None:
+        if detection.frame_type not in _CLIENT_ACTIVITY_FRAME_TYPES:
+            return
         if not self._has_strong_signal(detection):
             return
         self.event_service.log_event(
@@ -84,7 +89,9 @@ class WifiProbingService:
         )
 
     def _has_strong_signal(self, detection: WifiProbeDetection) -> bool:
-        return detection.rssi is not None and detection.rssi >= WIFI_PROBING_STRONG_RSSI_MIN
+        if detection.rssi is None:
+            return WIFI_PROBING_ALLOW_MISSING_RSSI
+        return detection.rssi >= WIFI_PROBING_STRONG_RSSI_MIN
 
     def _list_probe_events(self, window_seconds: int):
         events = self.event_service.list_recent_events_by_types(
