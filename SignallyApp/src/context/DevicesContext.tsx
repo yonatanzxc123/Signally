@@ -17,6 +17,21 @@ interface DevicesContextValue {
 const DevicesContext = createContext<DevicesContextValue | null>(null);
 const OPTIMISTIC_STATUS_HOLD_MS = 8_000;
 
+function getDeviceDisplayName(d: ApiDevice): string {
+  if (d.owner_name) return d.owner_name;
+
+  switch (d.owner_role) {
+    case 'ADMIN':
+      return 'Admin Device';
+    case 'FAMILY':
+      return 'Family Device';
+    case 'GUEST':
+      return 'Guest Device';
+    default:
+      return 'Unknown Device';
+  }
+}
+
 function mapDevice(d: ApiDevice): Device {
   const statusMap: Record<string, DeviceStatus> = {
     PENDING: 'unknown',
@@ -26,7 +41,7 @@ function mapDevice(d: ApiDevice): Device {
   return {
     id: d.mac_address,
     mac: d.mac_address,
-    name: d.owner_name ?? 'Unknown Device',
+    name: getDeviceDisplayName(d),
     ip: d.ip_address,
     status: statusMap[d.status] ?? 'unknown',
     ownerRole: (d.owner_role as Device['ownerRole']) ?? null,
@@ -58,11 +73,12 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     state: ApiSystemState | undefined,
     mac: string,
     newStatus: ApiDevice['status'],
+    ownerRole?: ApiDevice['owner_role'],
   ) {
     if (!state) return state;
     return {
       ...state,
-      present_devices: applyDeviceStatus(state.present_devices, mac, newStatus),
+      present_devices: applyDeviceStatus(state.present_devices, mac, newStatus, ownerRole),
       current_unknown_devices:
         newStatus === 'PENDING'
           ? state.current_unknown_devices
@@ -87,7 +103,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
   }
 
   function setManyLocalOptimisticStatuses(
-    updates: Array<{ mac: string; status: ApiDevice['status'] }>,
+    updates: Array<{ mac: string; status: ApiDevice['status']; ownerRole?: ApiDevice['owner_role'] }>,
   ) {
     for (const update of updates) {
       const normalizedMac = update.mac.toUpperCase();
@@ -103,7 +119,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     setOptimisticStatuses((old) => {
       const next = { ...old };
       for (const update of updates) {
-        next[update.mac.toUpperCase()] = { status: update.status };
+        next[update.mac.toUpperCase()] = { status: update.status, ownerRole: update.ownerRole };
       }
       return next;
     });
@@ -136,7 +152,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
       applyDeviceStatus(old, mac, newStatus, ownerRole)
     );
     queryClient.setQueryData<ApiSystemState>(['system-state'], (old) =>
-      applyDeviceStatusToSystemState(old, mac, newStatus)
+      applyDeviceStatusToSystemState(old, mac, newStatus, ownerRole)
     );
   }
 
@@ -189,7 +205,7 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
 
   const approveAllMutation = useMutation({
     mutationFn: (ownerRole: 'FAMILY' | 'GUEST') => api.approveAllPendingDevices(ownerRole, role),
-    onMutate: async () => {
+    onMutate: async (ownerRole) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: ['devices'] }),
         queryClient.cancelQueries({ queryKey: ['system-state'] }),
@@ -199,19 +215,19 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
         systemState: queryClient.getQueryData<ApiSystemState>(['system-state']),
       };
       queryClient.setQueryData<ApiDevice[]>(['devices'], (old) =>
-        old?.map((d) => d.status === 'PENDING' ? { ...d, status: 'AUTHORIZED' } : d) ?? []
+        old?.map((d) => d.status === 'PENDING' ? { ...d, status: 'AUTHORIZED', owner_role: ownerRole } : d) ?? []
       );
       setManyLocalOptimisticStatuses(
         (snapshot.devices ?? [])
           .filter((device) => device.status === 'PENDING')
-          .map((device) => ({ mac: device.mac_address, status: 'AUTHORIZED' }))
+          .map((device) => ({ mac: device.mac_address, status: 'AUTHORIZED', ownerRole }))
       );
       queryClient.setQueryData<ApiSystemState>(['system-state'], (old) => {
         if (!old) return old;
         return {
           ...old,
           present_devices: old.present_devices.map((d) =>
-            d.status === 'PENDING' ? { ...d, status: 'AUTHORIZED' } : d
+            d.status === 'PENDING' ? { ...d, status: 'AUTHORIZED', owner_role: ownerRole } : d
           ),
           current_unknown_devices: [],
           current_intruder_count: 0,
@@ -305,7 +321,11 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
                   (device) =>
                     (optimisticStatuses[device.mac_address.toUpperCase()]?.status ?? device.status) === 'PENDING'
                 )
-                .map((device) => ({ mac: device.mac_address, status: 'AUTHORIZED' }))
+                .map((device) => ({
+                  mac: device.mac_address,
+                  status: 'AUTHORIZED',
+                  ownerRole: ownerRole as ApiDevice['owner_role'],
+                }))
             );
             approveAllMutation.mutate(ownerRole);
           }
