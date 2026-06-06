@@ -18,6 +18,7 @@ from signally.config import (
     EVENT_WIFI_PROBING_ERROR,
     EVENT_WIFI_PROBING_STARTED,
     EVENT_WIFI_PROBING_STOPPED,
+    WIFI_PROBE_ACTIVITY_COOLDOWN_SECONDS,
     WIFI_PROBING_ALLOW_MISSING_RSSI,
     WIFI_PROBING_RECENT_EVENT_LIMIT,
     WIFI_PROBING_STRONG_RSSI_MIN,
@@ -40,9 +41,11 @@ class WifiProbingService:
             return
         if not self._has_strong_signal(detection):
             return
+        if not self._should_log_detection(detection.mac_address):
+            return
         self.event_service.log_event(
             event_type=EVENT_WIFI_PROBE_NEARBY_ACTIVITY,
-            details=self._build_details(detection),
+            details="Unknown wireless activity detected nearby.",
             device_mac=detection.mac_address,
         )
 
@@ -92,6 +95,21 @@ class WifiProbingService:
         if detection.rssi is None:
             return WIFI_PROBING_ALLOW_MISSING_RSSI
         return detection.rssi >= WIFI_PROBING_STRONG_RSSI_MIN
+
+    def _should_log_detection(self, mac_address: str) -> bool:
+        if WIFI_PROBE_ACTIVITY_COOLDOWN_SECONDS <= 0:
+            return True
+
+        recent_events = self.event_service.list_events_for_device_by_types(
+            device_mac=mac_address,
+            event_types=(EVENT_WIFI_PROBE_NEARBY_ACTIVITY,),
+            limit=1,
+        )
+        if not recent_events:
+            return True
+
+        last_seen_at = self._event_time(recent_events[0].created_at)
+        return (utc_now() - last_seen_at).total_seconds() >= WIFI_PROBE_ACTIVITY_COOLDOWN_SECONDS
 
     def _list_probe_events(self, window_seconds: int):
         events = self.event_service.list_recent_events_by_types(
