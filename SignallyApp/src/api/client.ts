@@ -61,6 +61,7 @@ export interface ApiSystemState {
   decision: string;
   reason: string;
   present_devices: ApiDevice[];
+  nearby_device_count: number;
   current_intruder_count: number;
   current_unknown_devices: ApiDevice[];
   admin_review_grace_active: boolean;
@@ -81,6 +82,7 @@ export interface ApiMonitoringCycle {
   authorized_devices_count: number;
   pending_devices_count: number;
   blocked_devices_count: number;
+  nearby_device_count: number;
   current_intruder_count: number;
   admin_review_grace_active: boolean;
   notification_audience: ApiUserRole[];

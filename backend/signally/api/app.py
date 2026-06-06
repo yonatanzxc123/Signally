@@ -680,6 +680,7 @@ def get_system_state():
                 to_device_response(d)
                 for d in connected_presence.connected_devices
             ],
+            nearby_device_count=decision.nearby_device_count,
             current_intruder_count=decision.current_intruder_count,
             current_unknown_devices=[
                 to_device_response(d)
@@ -729,6 +730,7 @@ def run_monitoring_cycle():
             authorized_devices_count=len(connected_presence.authorised_connected_devices),
             pending_devices_count=len(connected_presence.pending_connected_devices),
             blocked_devices_count=len(connected_presence.blocked_connected_devices),
+            nearby_device_count=decision.nearby_device_count,
             current_intruder_count=decision.current_intruder_count,
             admin_review_grace_active=decision.admin_review_grace_active,
             notification_audience=decision.notification_audience,

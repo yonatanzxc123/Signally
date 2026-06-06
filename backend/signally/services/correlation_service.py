@@ -98,8 +98,8 @@ class CorrelationService:
                 notification_audience=["ADMIN", "FAMILY"],
             )
 
-        # 5. AWAY ALERT: probe-only wireless activity with no approved user home
-        if away_mode and nearby_probe_activity and not approved_present:
+        # 5. AWAY ALERT: probe-only wireless activity while armed
+        if away_mode and nearby_probe_activity:
             return CorrelationDecision(
                 decision="ALERT",
                 severity="MEDIUM",
@@ -107,7 +107,7 @@ class CorrelationService:
                 security_mode=security_mode,
                 csi_presence_detected=csi_detected,
                 nearby_device_count=context.nearby_device_count,
-                approved_user_present=False,
+                approved_user_present=approved_present,
                 admin_present=admin_present,
                 family_present=family_present,
                 guest_present=guest_present,

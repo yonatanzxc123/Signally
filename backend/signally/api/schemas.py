@@ -63,6 +63,7 @@ class SystemStateResponse(BaseModel):
     decision: str
     reason: str
     present_devices: list[DeviceResponse]
+    nearby_device_count: int = 0
     current_intruder_count: int = 0
     current_unknown_devices: list[DeviceResponse] = []
     admin_review_grace_active: bool = False
@@ -82,6 +83,7 @@ class MonitoringCycleResponse(BaseModel):
     authorized_devices_count: int
     pending_devices_count: int
     blocked_devices_count: int
+    nearby_device_count: int = 0
     current_intruder_count: int = 0
     admin_review_grace_active: bool = False
     notification_audience: list[str] = []
