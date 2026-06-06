@@ -1,15 +1,12 @@
 """
-User and device ownership models.
-
-Users represent people the app understands. A user can own one or more
-approved devices, and the user's role controls what they can do in the app.
+User model — app authentication only.
 """
 
 from __future__ import annotations
 
 import enum
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Enum, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from signally.db.base import Base
@@ -27,17 +24,7 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), nullable=False)
     created_at: Mapped[DateTime] = mapped_column(DateTime, nullable=False, default=utc_now)
-
-
-class DeviceOwner(Base):
-    __tablename__ = "device_owners"
-
-    mac_address: Mapped[str] = mapped_column(
-        String(17),
-        ForeignKey("devices.mac_address"),
-        primary_key=True,
-    )
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    assigned_at: Mapped[DateTime] = mapped_column(DateTime, nullable=False, default=utc_now)

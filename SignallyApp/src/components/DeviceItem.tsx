@@ -6,7 +6,7 @@ import { Device } from '../types';
 
 interface Props {
   device: Device;
-  onApprove: (id: string) => void;
+  onApprove: (id: string, ownerRole: 'FAMILY' | 'GUEST') => void;
   onBlock: (id: string) => void;
   onPress?: (id: string) => void;
   canManage?: boolean;
@@ -20,28 +20,18 @@ type StatusConfig = {
 };
 
 const STATUS_CONFIG: Record<string, StatusConfig> = {
-  approved: {
-    label: 'Approved',
-    color: colors.approved,
-    bg: colors.approvedLight,
-    icon: 'checkmark-circle',
-  },
-  unknown: {
-    label: 'Unknown',
-    color: colors.unknown,
-    bg: colors.unknownLight,
-    icon: 'help-circle',
-  },
-  blocked: {
-    label: 'Blocked',
-    color: colors.blocked,
-    bg: colors.blockedLight,
-    icon: 'ban',
-  },
+  approved_family: { label: 'Family', color: colors.approved, bg: colors.approvedLight, icon: 'people' },
+  approved_guest: { label: 'Guest', color: colors.accent, bg: '#EFF6FF', icon: 'person' },
+  unknown: { label: 'Unknown', color: colors.unknown, bg: colors.unknownLight, icon: 'help-circle' },
+  blocked: { label: 'Blocked', color: colors.blocked, bg: colors.blockedLight, icon: 'ban' },
 };
 
 export default function DeviceItem({ device, onApprove, onBlock, onPress, canManage = true }: Props) {
-  const cfg = STATUS_CONFIG[device.status];
+  const statusKey =
+    device.status === 'approved' && device.ownerRole === 'GUEST' ? 'approved_guest' :
+    device.status === 'approved' ? 'approved_family' :
+    device.status;
+  const cfg = STATUS_CONFIG[statusKey as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.unknown;
 
   return (
     <TouchableOpacity style={styles.card} onPress={() => onPress?.(device.id)} activeOpacity={onPress ? 0.7 : 1}>
@@ -74,22 +64,31 @@ export default function DeviceItem({ device, onApprove, onBlock, onPress, canMan
         </View>
       </View>
 
-      {device.status === 'unknown' && canManage && (
+      {(device.status === 'unknown' || device.status === 'blocked') && canManage && (
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.btn, styles.btnApprove]}
-            onPress={() => onApprove(device.id)}
+            onPress={() => onApprove(device.id, 'FAMILY')}
           >
-            <Ionicons name="checkmark" size={14} color={colors.approved} />
-            <Text style={[styles.btnText, { color: colors.approved }]}>Approve</Text>
+            <Ionicons name="people-outline" size={14} color={colors.approved} />
+            <Text style={[styles.btnText, { color: colors.approved }]}>Family</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.btn, styles.btnBlock]}
-            onPress={() => onBlock(device.id)}
+            style={[styles.btn, { backgroundColor: '#EFF6FF' }]}
+            onPress={() => onApprove(device.id, 'GUEST')}
           >
-            <Ionicons name="ban" size={14} color={colors.blocked} />
-            <Text style={[styles.btnText, { color: colors.blocked }]}>Block</Text>
+            <Ionicons name="person-add-outline" size={14} color={colors.accent} />
+            <Text style={[styles.btnText, { color: colors.accent }]}>Guest</Text>
           </TouchableOpacity>
+          {device.status !== 'blocked' && (
+            <TouchableOpacity
+              style={[styles.btn, styles.btnBlock]}
+              onPress={() => onBlock(device.id)}
+            >
+              <Ionicons name="ban" size={14} color={colors.blocked} />
+              <Text style={[styles.btnText, { color: colors.blocked }]}>Block</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </TouchableOpacity>

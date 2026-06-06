@@ -27,38 +27,40 @@ class AdminManager:
     def approve_device(
         self,
         mac_address: str,
+        owner_role: UserRole | str,
         actor_role: UserRole | str = UserRole.ADMIN,
-        owner_name: str | None = None,
-        owner_role: UserRole | str = UserRole.GUEST,
     ) -> Device:
         self.user_service.require_admin(actor_role)
+        role_value = owner_role.value if isinstance(owner_role, UserRole) else owner_role
         device = self.device_service.update_status(mac_address, DeviceStatus.AUTHORIZED)
-        if owner_name:
-            _, device = self.user_service.create_user_for_device(
-                mac_address=device.mac_address,
-                display_name=owner_name,
-                role=owner_role,
-            )
+        device.owner_role = role_value
+        device.approved_at = utc_now()
+        self.device_service.session.commit()
         self.event_service.log_event(
             event_type="DEVICE_APPROVED",
-            details="Admin approved device",
+            details="Admin approved device as {0}".format(role_value),
             device_mac=device.mac_address,
         )
         return device
 
     def approve_all_pending_devices(
         self,
+        owner_role: UserRole | str,
         actor_role: UserRole | str = UserRole.ADMIN,
     ) -> list[Device]:
         self.user_service.require_admin(actor_role)
+        role_value = owner_role.value if isinstance(owner_role, UserRole) else owner_role
         devices = self.device_service.list_pending_devices()
+        now = utc_now()
 
         for device in devices:
             device.status = DeviceStatus.AUTHORIZED
-            device.last_seen = utc_now()
+            device.owner_role = role_value
+            device.approved_at = now
+            device.last_seen = now
             self.event_service.log_event(
                 event_type="DEVICE_APPROVED",
-                details="Admin approved device via bulk action",
+                details="Admin approved device as {0} via bulk action".format(role_value),
                 device_mac=device.mac_address,
             )
 
@@ -99,7 +101,6 @@ class AdminManager:
         return self.event_service.delete_all_events()
 
     def reset_database_content(self) -> dict:
-        deleted_device_owners = self.user_service.delete_all_device_owners()
         deleted_users = self.user_service.delete_all_users()
 
         devices = self.device_service.list_all_devices()
@@ -127,7 +128,6 @@ class AdminManager:
             "deleted_devices": deleted_devices,
             "deleted_events": deleted_events,
             "deleted_users": deleted_users,
-            "deleted_device_owners": deleted_device_owners,
         }
 
     def list_pending_devices(self) -> list[Device]:

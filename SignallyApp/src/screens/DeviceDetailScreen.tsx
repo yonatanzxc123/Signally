@@ -19,9 +19,10 @@ import { colors, font, radius, spacing } from '../theme';
 type Props = NativeStackScreenProps<DevicesStackParamList, 'DeviceDetail'>;
 
 const STATUS_CONFIG = {
-  approved: { label: 'Approved', color: colors.approved, bg: colors.approvedLight, icon: 'checkmark-circle' as const },
-  unknown:  { label: 'Unknown',  color: colors.unknown,  bg: colors.unknownLight,  icon: 'help-circle' as const },
-  blocked:  { label: 'Blocked',  color: colors.blocked,  bg: colors.blockedLight,  icon: 'ban' as const },
+  approved_family:  { label: 'Family Member',  color: colors.approved, bg: colors.approvedLight, icon: 'people' as const },
+  approved_guest:   { label: 'Guest',          color: colors.accent,   bg: '#EFF6FF',            icon: 'person' as const },
+  unknown:          { label: 'Unknown',        color: colors.unknown,  bg: colors.unknownLight,  icon: 'help-circle' as const },
+  blocked:          { label: 'Blocked',        color: colors.blocked,  bg: colors.blockedLight,  icon: 'ban' as const },
 };
 
 export default function DeviceDetailScreen({ route, navigation }: Props) {
@@ -46,7 +47,11 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
     );
   }
 
-  const cfg = STATUS_CONFIG[device.status];
+  const statusKey =
+    device.status === 'approved' && device.ownerRole === 'GUEST' ? 'approved_guest' :
+    device.status === 'approved' ? 'approved_family' :
+    device.status;
+  const cfg = STATUS_CONFIG[statusKey as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.unknown;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -100,14 +105,23 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
           </TouchableOpacity>
         )}
 
-        {device.status !== 'approved' && canManageDevices && (
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: colors.approvedLight }]}
-            onPress={() => { approveDevice(device.id); navigation.goBack(); }}
-          >
-            <Ionicons name="checkmark-circle-outline" size={20} color={colors.approved} />
-            <Text style={[styles.actionBtnText, { color: colors.approved }]}>Approve Device</Text>
-          </TouchableOpacity>
+        {(device.status === 'unknown' || device.status === 'blocked') && canManageDevices && (
+          <>
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: colors.approvedLight }]}
+              onPress={() => { approveDevice(device.id, 'FAMILY'); navigation.goBack(); }}
+            >
+              <Ionicons name="people-outline" size={20} color={colors.approved} />
+              <Text style={[styles.actionBtnText, { color: colors.approved }]}>Approve as Family Member</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#EFF6FF' }]}
+              onPress={() => { approveDevice(device.id, 'GUEST'); navigation.goBack(); }}
+            >
+              <Ionicons name="person-add-outline" size={20} color={colors.accent} />
+              <Text style={[styles.actionBtnText, { color: colors.accent }]}>Approve as Guest (24h)</Text>
+            </TouchableOpacity>
+          </>
         )}
 
         {device.status !== 'blocked' && canManageDevices && (

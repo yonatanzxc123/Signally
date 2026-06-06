@@ -19,20 +19,15 @@ class CorrelationService:
         admin_present = context.connected_presence.admin_present
         family_present = context.connected_presence.family_present
         guest_present = context.connected_presence.guest_present
-        blocked_present = (
-            len(context.connected_presence.blocked_connected_devices) > 0
-            or len(context.nearby_presence.blocked_nearby_devices) > 0
-        )
+        blocked_present = len(context.connected_presence.blocked_connected_devices) > 0
         csi_detected = context.csi_presence_detected
         security_mode = context.security_mode
         away_mode = security_mode == SecurityMode.AWAY
-        current_intruder_count = max(
-            len(context.connected_presence.pending_connected_devices),
-            len(context.nearby_presence.unknown_nearby_devices),
-        )
+        connected_intruder_count = len(context.connected_presence.pending_connected_devices)
+        nearby_probe_activity = context.nearby_presence.nearby_probe_count > 0
         review_grace_active = self._is_admin_review_grace_active(context)
 
-        # 1. CRITICAL: Blocked device physically here
+        # 1. CRITICAL: Blocked device on the network
         if blocked_present:
             return CorrelationDecision(
                 decision="HIGH_ALERT",
@@ -45,17 +40,17 @@ class CorrelationService:
                 admin_present=admin_present,
                 family_present=family_present,
                 guest_present=guest_present,
-                current_intruder_count=max(1, current_intruder_count),
+                current_intruder_count=max(1, connected_intruder_count),
                 notification_audience=["ADMIN", "FAMILY"],
             )
 
-        # 2. HOME: unknown device gets reviewed without arming a loud intruder alert.
-        if current_intruder_count > 0 and not away_mode:
+        # 2. HOME: unknown connected device — soft review, no loud alert
+        if connected_intruder_count > 0 and not away_mode:
             audience = ["ADMIN"] if review_grace_active else ["ADMIN", "FAMILY"]
             return CorrelationDecision(
                 decision="HOME_REVIEW",
                 severity="MEDIUM",
-                reason="Unknown device detected while Home mode is active.",
+                reason="Unknown connected device detected while Home mode is active.",
                 security_mode=security_mode,
                 csi_presence_detected=csi_detected,
                 nearby_device_count=context.nearby_device_count,
@@ -63,17 +58,17 @@ class CorrelationService:
                 admin_present=admin_present,
                 family_present=family_present,
                 guest_present=guest_present,
-                current_intruder_count=current_intruder_count,
+                current_intruder_count=connected_intruder_count,
                 admin_review_grace_active=review_grace_active,
                 notification_audience=audience,
             )
 
-        # 3. AWAY REVIEW: unknown current device while an admin is home.
-        if current_intruder_count > 0 and admin_present and review_grace_active:
+        # 3. AWAY REVIEW: unknown connected device while admin is home within grace window
+        if connected_intruder_count > 0 and admin_present and review_grace_active:
             return CorrelationDecision(
                 decision="ADMIN_REVIEW",
                 severity="MEDIUM",
-                reason="Unknown device detected. Admin review window is active before family notification.",
+                reason="Unknown connected device detected. Admin review window active.",
                 security_mode=security_mode,
                 csi_presence_detected=csi_detected,
                 nearby_device_count=context.nearby_device_count,
@@ -81,17 +76,17 @@ class CorrelationService:
                 admin_present=admin_present,
                 family_present=family_present,
                 guest_present=guest_present,
-                current_intruder_count=current_intruder_count,
+                current_intruder_count=connected_intruder_count,
                 admin_review_grace_active=True,
                 notification_audience=["ADMIN"],
             )
 
-        # 4. AWAY ALERT: unknown device stayed unresolved or no admin is present.
-        if current_intruder_count > 0:
+        # 4. AWAY ALERT: unknown connected device, no grace or no admin
+        if connected_intruder_count > 0:
             return CorrelationDecision(
                 decision="ALERT",
                 severity="HIGH" if csi_detected else "MEDIUM",
-                reason="Unknown current device requires attention.",
+                reason="Unknown device connected to the network while armed.",
                 security_mode=security_mode,
                 csi_presence_detected=csi_detected,
                 nearby_device_count=context.nearby_device_count,
@@ -99,11 +94,28 @@ class CorrelationService:
                 admin_present=admin_present,
                 family_present=family_present,
                 guest_present=guest_present,
-                current_intruder_count=current_intruder_count,
+                current_intruder_count=connected_intruder_count,
                 notification_audience=["ADMIN", "FAMILY"],
             )
 
-        # 5. HOME: CSI presence alone is occupancy evidence, not an intruder verdict.
+        # 5. AWAY ALERT: probe-only wireless activity with no approved user home
+        if away_mode and nearby_probe_activity and not approved_present:
+            return CorrelationDecision(
+                decision="ALERT",
+                severity="MEDIUM",
+                reason="Unknown wireless activity detected nearby.",
+                security_mode=security_mode,
+                csi_presence_detected=csi_detected,
+                nearby_device_count=context.nearby_device_count,
+                approved_user_present=False,
+                admin_present=admin_present,
+                family_present=family_present,
+                guest_present=guest_present,
+                current_intruder_count=context.nearby_presence.nearby_probe_count,
+                notification_audience=["ADMIN", "FAMILY"],
+            )
+
+        # 6. HOME: CSI presence alone — occupancy evidence, not intruder verdict
         if csi_detected and not approved_present and not away_mode:
             return CorrelationDecision(
                 decision="HOME_OCCUPIED",
@@ -118,14 +130,12 @@ class CorrelationService:
                 guest_present=guest_present,
             )
 
-        # 6. AWAY ALERT: CSI motion + NO authorized phone connected
+        # 7. AWAY ALERT: CSI motion, no authorized phone home
         if csi_detected and not approved_present:
-            reason = "Physical presence detected while Away mode is armed and no authorized devices are home."
-            
             return CorrelationDecision(
                 decision="ALERT",
                 severity="MEDIUM",
-                reason=reason,
+                reason="Physical presence detected while armed and no authorized devices are home.",
                 security_mode=security_mode,
                 csi_presence_detected=csi_detected,
                 nearby_device_count=context.nearby_device_count,
@@ -137,7 +147,7 @@ class CorrelationService:
                 notification_audience=["ADMIN", "FAMILY"],
             )
 
-        # 7. SAFE: CSI motion + Authorized user is home
+        # 8. SAFE: CSI motion + authorized user home
         if csi_detected and approved_present:
             return CorrelationDecision(
                 decision="SAFE",
@@ -152,7 +162,7 @@ class CorrelationService:
                 guest_present=guest_present,
             )
 
-        # 8. IDLE: No unresolved current unknowns and no CSI motion.
+        # 9. IDLE
         return CorrelationDecision(
             decision="IDLE",
             severity="LOW",
@@ -167,15 +177,10 @@ class CorrelationService:
         )
 
    def _is_admin_review_grace_active(self, context: CorrelationContext) -> bool:
-        first_unknown_seen_at = context.nearby_presence.first_unknown_seen_at
-        if first_unknown_seen_at is None:
-            pending_devices = context.connected_presence.pending_connected_devices
-            if not pending_devices:
-                return True
-            first_unknown_seen_at = min(device.first_seen for device in pending_devices)
-
-        if first_unknown_seen_at.tzinfo is None:
-            first_unknown_seen_at = first_unknown_seen_at.replace(tzinfo=timezone.utc)
-
-        age_seconds = (utc_now() - first_unknown_seen_at).total_seconds()
-        return age_seconds < ADMIN_REVIEW_GRACE_SECONDS
+        pending_devices = context.connected_presence.pending_connected_devices
+        if not pending_devices:
+            return True
+        first_seen = min(device.first_seen for device in pending_devices)
+        if first_seen.tzinfo is None:
+            first_seen = first_seen.replace(tzinfo=timezone.utc)
+        return (utc_now() - first_seen).total_seconds() < ADMIN_REVIEW_GRACE_SECONDS

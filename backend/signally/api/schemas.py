@@ -99,14 +99,8 @@ class UserCreateRequest(BaseModel):
     role: str
 
 
-class AssignDeviceRequest(BaseModel):
-    user_id: int
-    mark_authorized: bool = True
-
-
 class ApproveDeviceRequest(BaseModel):
-    owner_name: Optional[str] = None
-    owner_role: str = "GUEST"
+    owner_role: str  # must be FAMILY or GUEST
 
 
 class SetDeviceHostnameHintRequest(BaseModel):
@@ -122,6 +116,27 @@ class SecurityModeResponse(BaseModel):
 
 class SetSecurityModeRequest(BaseModel):
     mode: str
+
+
+class SignupRequest(BaseModel):
+    display_name: str
+    email: str
+    password: str
+    confirm_password: str
+    role: str = "ADMIN"
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user_id: int
+    display_name: str
+    role: str
+    email: str
 
 
 class WifiProbingStartRequest(BaseModel):

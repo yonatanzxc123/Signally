@@ -11,6 +11,14 @@ export type BackendDeviceStatus = 'PENDING' | 'AUTHORIZED' | 'BLOCKED';
 export type ApiUserRole = 'ADMIN' | 'FAMILY' | 'GUEST';
 export type ApiSecurityMode = 'HOME' | 'AWAY';
 
+export interface ApiAuthResponse {
+  token: string;
+  user_id: number;
+  display_name: string;
+  role: ApiUserRole;
+  email: string;
+}
+
 export interface ApiConnectedInspection {
   device_category: string;
   confidence: number;
@@ -106,7 +114,13 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     });
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`API ${res.status}: ${body}`);
+      try {
+        const parsed = JSON.parse(body);
+        throw new Error(parsed.detail ?? body);
+      } catch (e) {
+        if (e instanceof SyntaxError) throw new Error(body);
+        throw e;
+      }
     }
     return res.json() as Promise<T>;
   } finally {
@@ -124,15 +138,17 @@ export const api = {
   // Devices
   getDevices: () => request<ApiDevice[]>('/devices'),
   getPendingDevices: () => request<ApiDevice[]>('/devices/pending'),
-  approveDevice: (mac: string, role: ApiUserRole = 'ADMIN') =>
+  approveDevice: (mac: string, ownerRole: 'FAMILY' | 'GUEST', role: ApiUserRole = 'ADMIN') =>
     request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/approve`, {
       method: 'POST',
       headers: roleHeaders(role),
+      body: JSON.stringify({ owner_role: ownerRole }),
     }),
-  approveAllPendingDevices: (role: ApiUserRole = 'ADMIN') =>
+  approveAllPendingDevices: (ownerRole: 'FAMILY' | 'GUEST', role: ApiUserRole = 'ADMIN') =>
     request<ApiDevice[]>('/devices/approve-all', {
       method: 'POST',
       headers: roleHeaders(role),
+      body: JSON.stringify({ owner_role: ownerRole }),
     }),
   blockDevice: (mac: string, role: ApiUserRole = 'ADMIN') =>
     request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/block`, {
@@ -175,4 +191,12 @@ export const api = {
   clearAllDevices: () => request<ApiMessage>('/admin/devices', { method: 'DELETE' }),
   clearAllEvents: () => request<ApiMessage>('/admin/events', { method: 'DELETE' }),
   resetDatabase: () => request<ApiMessage>('/admin/reset', { method: 'DELETE' }),
+
+  // Auth
+  me: (token: string) =>
+    request<ApiAuthResponse>('/auth/me', { headers: { Authorization: `Bearer ${token}` } }),
+  signup: (body: { display_name: string; email: string; password: string; confirm_password: string; role: ApiUserRole }) =>
+    request<ApiAuthResponse>('/auth/signup', { method: 'POST', body: JSON.stringify(body) }),
+  login: (body: { email: string; password: string }) =>
+    request<ApiAuthResponse>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
 };
