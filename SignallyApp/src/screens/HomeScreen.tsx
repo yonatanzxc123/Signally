@@ -93,8 +93,15 @@ export default function HomeScreen() {
   });
 
   const hasUnknown = devices.some((d) => d.status === 'unknown');
+  const connectedUnknownCount = devices.filter((d) => d.status === 'unknown').length;
+  const intruderCount = systemState?.current_intruder_count ?? 0;
+  const unknownStatCount = Math.max(connectedUnknownCount, intruderCount);
+  const unknownStatLabel =
+    connectedUnknownCount === 0 && intruderCount > 0
+      ? unknownStatCount === 1 ? 'Unknown Device' : 'Unknown Devices'
+      : 'Unknown';
   const shouldNotifyRole =
-    (systemState?.current_intruder_count ?? 0) > 0 &&
+    intruderCount > 0 &&
     (systemState?.notification_audience ?? []).includes(role);
   const recentEvents = events.slice(0, 5);
   const scanning = scanMutation.isPending;
@@ -260,9 +267,9 @@ export default function HomeScreen() {
           </View>
           <View style={styles.statCard}>
             <Text style={[styles.statNumber, { color: colors.unknown }]}>
-              {devices.filter((d) => d.status === 'unknown').length}
+              {unknownStatCount > 1 && connectedUnknownCount === 0 ? 'Multiple' : unknownStatCount}
             </Text>
-            <Text style={styles.statLabel}>Unknown</Text>
+            <Text style={styles.statLabel}>{unknownStatLabel}</Text>
           </View>
         </View>
 
@@ -484,11 +491,13 @@ const styles = StyleSheet.create({
     fontSize: font.xxl,
     fontWeight: '700',
     color: colors.primary,
+    textAlign: 'center',
   },
   statLabel: {
     fontSize: font.sm,
     color: colors.textSecondary,
     marginTop: 2,
+    textAlign: 'center',
   },
   scanBtn: {
     flexDirection: 'row',
