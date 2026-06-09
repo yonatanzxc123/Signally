@@ -64,9 +64,9 @@ WIFI_PROBE_ACTIVITY_COOLDOWN_SECONDS = int(
 WIFI_PROBING_STRONG_RSSI_MIN = int(
     os.getenv("SIGNALLY_WIFI_PROBING_STRONG_RSSI_MIN", "-60")
 )
-
+# change later determines wether to only count strong signals or not
 WIFI_PROBING_ALLOW_MISSING_RSSI = (
-    os.getenv("SIGNALLY_WIFI_PROBING_ALLOW_MISSING_RSSI", "true").lower()
+    os.getenv("SIGNALLY_WIFI_PROBING_ALLOW_MISSING_RSSI", "false").lower()
     in ("1", "true", "yes", "on")
 )
 
