@@ -10,6 +10,8 @@ import math
 import logging
 import time
 
+from signally.config import CSI_REAL_PROVIDER_ENABLED
+
 logger = logging.getLogger(__name__)
 
 class CsiDetectionProvider:
@@ -130,19 +132,19 @@ class RealCsiDetectionProvider(CsiDetectionProvider):
 
 # Auto-fallback to "not detected" if we haven't received any data for a while
 class AutoFallbackCsiProvider(CsiDetectionProvider):
-    def __init__(self):
-        self.real = RealCsiDetectionProvider()
+    def __init__(self, real_enabled: bool = CSI_REAL_PROVIDER_ENABLED):
+        self.real = RealCsiDetectionProvider() if real_enabled else None
         self.mock = FlagCsiDetectionProvider()
 
     def is_presence_detected(self) -> bool:
         # If the Pi is actually sending data, use it. Otherwise, use Mock.
-        if self.real.is_receiving_data():
+        if self.real is not None and self.real.is_receiving_data():
             return self.real.is_presence_detected()
         # Automatically fall back if the Pi is off!
         return self.mock.is_presence_detected()
 
     def get_presence_strength(self) -> Optional[float]:
-        if self.real.is_receiving_data():
+        if self.real is not None and self.real.is_receiving_data():
             return self.real.get_presence_strength()
         return self.mock.get_presence_strength()
 
@@ -152,3 +154,7 @@ class AutoFallbackCsiProvider(CsiDetectionProvider):
         
     def set_strength(self, value: Optional[float]) -> None:
         self.mock.set_strength(value)
+
+    def stop(self) -> None:
+        if self.real is not None:
+            self.real.stop()

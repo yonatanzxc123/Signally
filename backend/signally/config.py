@@ -11,6 +11,13 @@ from __future__ import annotations
 import os
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 # Database
 DATABASE_URL = os.getenv("SIGNALLY_DATABASE_URL", "sqlite:///signally.db")
 
@@ -31,12 +38,21 @@ ADMIN_REVIEW_GRACE_SECONDS = int(os.getenv("SIGNALLY_ADMIN_REVIEW_GRACE_SECONDS"
 
 # Monitoring loop
 MONITOR_INTERVAL_SECONDS = int(os.getenv("SIGNALLY_MONITOR_INTERVAL_SECONDS", "10"))
+AUTO_START_MONITORING = _env_bool("SIGNALLY_AUTO_START_MONITORING", False)
+ALERT_COOLDOWN_SECONDS = int(os.getenv("SIGNALLY_ALERT_COOLDOWN_SECONDS", "60"))
 
 # Guest approval window
 GUEST_APPROVAL_HOURS = int(os.getenv("SIGNALLY_GUEST_APPROVAL_HOURS", "24"))
 
 # WIFI probing 
 UNASSOCIATED_IP_ADDRESS = os.getenv("SIGNALLY_UNASSOCIATED_IP_ADDRESS", "UNASSOCIATED")
+AUTO_START_WIFI_PROBING = _env_bool("SIGNALLY_AUTO_START_WIFI_PROBING", False)
+WIFI_PROBING_INTERFACE = os.getenv("SIGNALLY_WIFI_PROBING_INTERFACE", "wlan1")
+WIFI_PROBING_MOCK_MODE = _env_bool("SIGNALLY_WIFI_PROBING_MOCK_MODE", True)
+WIFI_PROBING_FALLBACK_TO_MOCK = _env_bool("SIGNALLY_WIFI_PROBING_FALLBACK_TO_MOCK", True)
+
+# CSI placeholder. Real CSI is intentionally opt-in for this phase.
+CSI_REAL_PROVIDER_ENABLED = _env_bool("SIGNALLY_CSI_REAL_PROVIDER_ENABLED", False)
 
 EVENT_DEVICE_DELETED = "DEVICE_DELETED"
 EVENT_GUEST_APPROVAL_EXPIRED = "GUEST_APPROVAL_EXPIRED"

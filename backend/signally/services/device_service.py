@@ -47,8 +47,12 @@ class DeviceService:
                     status=DeviceStatus.PENDING,
                 )
                 self.session.add(device)
-                self.session.commit()
-                self.session.refresh(device)
+                try:
+                    self.session.commit()
+                    self.session.refresh(device)
+                except Exception:
+                    self.session.rollback()
+                    raise
 
                 self.event_service.log_event(
                     event_type=EVENT_DEVICE_DISCOVERED_NEW,
@@ -59,8 +63,12 @@ class DeviceService:
             else:
                 existing.ip_address = result.ip_address
                 existing.last_seen = utc_now()
-                self.session.commit()
-                self.session.refresh(existing)
+                try:
+                    self.session.commit()
+                    self.session.refresh(existing)
+                except Exception:
+                    self.session.rollback()
+                    raise
 
                 self.event_service.log_event(
                     event_type=EVENT_DEVICE_SEEN_AGAIN,
@@ -78,8 +86,12 @@ class DeviceService:
 
         device.status = new_status
         device.last_seen = utc_now()
-        self.session.commit()
-        self.session.refresh(device)
+        try:
+            self.session.commit()
+            self.session.refresh(device)
+        except Exception:
+            self.session.rollback()
+            raise
         return device
 
     def delete_device(self, mac_address: str) -> None:
@@ -88,7 +100,11 @@ class DeviceService:
             raise ValueError("Device with MAC {0} was not found".format(mac_address))
 
         self.session.delete(device)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
 
     def delete_all_devices(self) -> int:
         devices = self.list_all_devices()
@@ -97,7 +113,11 @@ class DeviceService:
         for device in devices:
             self.session.delete(device)
 
-        self.session.commit()
+        try:
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
         return count
     
 
@@ -114,13 +134,21 @@ class DeviceService:
                 status=DeviceStatus.PENDING,
             )
             self.session.add(device)
-            self.session.commit()
-            self.session.refresh(device)
+            try:
+                self.session.commit()
+                self.session.refresh(device)
+            except Exception:
+                self.session.rollback()
+                raise
             return device, True
 
         if ip_address is not None:
             device.ip_address = ip_address
         device.last_seen = utc_now()
-        self.session.commit()
-        self.session.refresh(device)
+        try:
+            self.session.commit()
+            self.session.refresh(device)
+        except Exception:
+            self.session.rollback()
+            raise
         return device, False

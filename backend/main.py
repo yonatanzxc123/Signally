@@ -20,6 +20,7 @@ import uvicorn
 from signally.admin.admin_manager import AdminManager
 from signally.db.init_db import initialize_database
 from signally.db.session import SessionLocal
+from signally.models.user import UserRole
 from signally.network_scanner.scanner import NetworkScanner
 from signally.services.device_service import DeviceService
 from signally.services.event_service import EventService
@@ -48,6 +49,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     approve_parser = subparsers.add_parser("approve", help="Approve a device")
     approve_parser.add_argument("--mac", required=True)
+    approve_parser.add_argument(
+        "--owner-role",
+        default=UserRole.FAMILY.value,
+        choices=[UserRole.FAMILY.value, UserRole.GUEST.value],
+    )
 
     block_parser = subparsers.add_parser("block", help="Block a device")
     block_parser.add_argument("--mac", required=True)
@@ -155,7 +161,7 @@ def main() -> None:
             print("Wi-Fi probing run completed.")
 
         elif args.command == "approve":
-            device = admin_manager.approve_device(args.mac)
+            device = admin_manager.approve_device(args.mac, owner_role=args.owner_role)
             print("Approved device: {0}".format(device.mac_address))
 
         elif args.command == "block":

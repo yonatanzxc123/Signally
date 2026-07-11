@@ -50,6 +50,7 @@ export interface ApiEvent {
 }
 
 export interface ApiSystemState {
+  mode: ApiSecurityMode;
   security_mode: ApiSecurityMode;
   security_mode_updated_by_role: ApiUserRole | 'SYSTEM' | null;
   security_mode_updated_at: string | null;
@@ -62,12 +63,17 @@ export interface ApiSystemState {
   reason: string;
   present_devices: ApiDevice[];
   current_intruder_count: number;
+  known_devices: number;
+  unknown_devices: number;
+  nearby_probe_count: number;
   current_unknown_devices: ApiDevice[];
   admin_review_grace_active: boolean;
   notification_audience: ApiUserRole[];
+  recent_alerts: ApiEvent[];
 }
 
 export interface ApiMonitoringCycle {
+  mode: ApiSecurityMode;
   security_mode: ApiSecurityMode;
   csi_presence_detected: boolean;
   approved_user_present: boolean;
@@ -82,8 +88,11 @@ export interface ApiMonitoringCycle {
   pending_devices_count: number;
   blocked_devices_count: number;
   current_intruder_count: number;
+  nearby_probe_count: number;
   admin_review_grace_active: boolean;
   notification_audience: ApiUserRole[];
+  scan_error: string | null;
+  recent_alerts: ApiEvent[];
 }
 
 export interface ApiMessage {
@@ -179,7 +188,7 @@ export const api = {
   getSecurityMode: () => request<ApiSecurityModeState>('/security-mode'),
   setSecurityMode: (mode: ApiSecurityMode, role: ApiUserRole = 'ADMIN') =>
     request<ApiSecurityModeState>('/security-mode', {
-      method: 'POST',
+      method: 'PUT',
       headers: roleHeaders(role),
       body: JSON.stringify({ mode }),
     }),

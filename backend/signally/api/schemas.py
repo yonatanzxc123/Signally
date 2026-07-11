@@ -52,6 +52,7 @@ class CsiPresenceResponse(BaseModel):
 
 
 class SystemStateResponse(BaseModel):
+    mode: str = "HOME"
     security_mode: str = "HOME"
     security_mode_updated_by_role: Optional[str] = None
     security_mode_updated_at: Optional[datetime] = None
@@ -64,11 +65,16 @@ class SystemStateResponse(BaseModel):
     reason: str
     present_devices: list[DeviceResponse]
     current_intruder_count: int = 0
+    known_devices: int = 0
+    unknown_devices: int = 0
+    nearby_probe_count: int = 0
     current_unknown_devices: list[DeviceResponse] = []
     admin_review_grace_active: bool = False
     notification_audience: list[str] = []
+    recent_alerts: list[EventResponse] = []
 
 class MonitoringCycleResponse(BaseModel):
+    mode: str = "HOME"
     security_mode: str = "HOME"
     csi_presence_detected: bool
     approved_user_present: bool
@@ -83,8 +89,11 @@ class MonitoringCycleResponse(BaseModel):
     pending_devices_count: int
     blocked_devices_count: int
     current_intruder_count: int = 0
+    nearby_probe_count: int = 0
     admin_review_grace_active: bool = False
     notification_audience: list[str] = []
+    scan_error: Optional[str] = None
+    recent_alerts: list[EventResponse] = []
 
 
 class UserResponse(BaseModel):
