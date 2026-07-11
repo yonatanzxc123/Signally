@@ -53,4 +53,22 @@ venv/
 # Misc
 *.orig.*
 
+# Local agent / AI tooling artifacts
+.agent/
+.agents/
+.codex/
+.openai/
+.cursor/
+.cache/
+
+# Local logs / temp files
+*.log
+*.tmp
+*.temp
+tmp/
+temp/
+
+# OS junk
+.DS_Store
+Thumbs.db
 
