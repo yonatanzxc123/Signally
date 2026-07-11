@@ -10,6 +10,18 @@ __pycache__/
 
 
 # SQLite DB (optional - keep or remove based on what we need)
+
+# SQLite runtime artifacts
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
+*.db.bak
+*.db.review.bak
+*.sqlite-journal
+*.sqlite3-journal
 signally.db
 
 # Node / Expo
