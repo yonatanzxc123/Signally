@@ -1,8 +1,5 @@
 """
 Connected-device presence service.
-
-This service answers:
-'Which devices are currently connected/present according to recent ARP evidence?'
 """
 
 from __future__ import annotations
@@ -15,6 +12,8 @@ from sqlalchemy.orm import Session
 from signally.config import (
     EVENT_DEVICE_DISCOVERED_NEW,
     EVENT_DEVICE_SEEN_AGAIN,
+    EVENT_GUEST_APPROVAL_EXPIRED,
+    GUEST_APPROVAL_HOURS,
     PRESENCE_WINDOW_SECONDS,
 )
 from signally.models.device import Device, DeviceStatus
@@ -41,21 +40,17 @@ class PresenceService:
         self.device_service = DeviceService(session)
         self.event_service = EventService(session)
 
-    def get_presence_cutoff(self):
-        return utc_now() - timedelta(seconds=self.presence_window_seconds)
-
     def get_present_devices(self) -> List[Device]:
-        cutoff = self.get_presence_cutoff()
+        cutoff = utc_now() - timedelta(seconds=self.presence_window_seconds)
         events = self.event_service.list_recent_events_by_types(
             event_types=ARP_PRESENCE_EVENT_TYPES,
             limit=500,
         )
 
-        seen_macs = set()  # type: Set[str]
+        seen_macs: Set[str] = set()
         devices = []
 
         for event in events:
-         
             event_time = event.created_at
             if event_time.tzinfo is None:
                 event_time = event_time.replace(tzinfo=timezone.utc)
@@ -79,16 +74,58 @@ class PresenceService:
     def get_presence_snapshot(self) -> ConnectedPresenceSnapshot:
         present_devices = self.get_present_devices()
 
-        authorised = [d for d in present_devices if d.status == DeviceStatus.AUTHORIZED]
+        authorised = []
         pending = [d for d in present_devices if d.status == DeviceStatus.PENDING]
         blocked = [d for d in present_devices if d.status == DeviceStatus.BLOCKED]
+        admin = []
+        family = []
+        guest = []
+
+        for device in present_devices:
+            if device.status != DeviceStatus.AUTHORIZED:
+                continue
+
+            role = device.owner_role
+
+            if role == "GUEST":
+                if device.approved_at and self._guest_expired(device.approved_at):
+                    device.status = DeviceStatus.PENDING
+                    device.owner_role = None
+                    device.approved_at = None
+                    self.device_service.session.commit()
+                    self.event_service.log_event(
+                        event_type=EVENT_GUEST_APPROVAL_EXPIRED,
+                        details="Guest approval expired after {0} hours".format(GUEST_APPROVAL_HOURS),
+                        device_mac=device.mac_address,
+                    )
+                    pending.append(device)
+                else:
+                    authorised.append(device)
+                    guest.append(device)
+            elif role == "FAMILY":
+                authorised.append(device)
+                family.append(device)
+            elif role == "ADMIN":
+                authorised.append(device)
+                admin.append(device)
+            else:
+                authorised.append(device)
 
         return ConnectedPresenceSnapshot(
             connected_devices=present_devices,
             authorised_connected_devices=authorised,
             pending_connected_devices=pending,
             blocked_connected_devices=blocked,
+            admin_connected_devices=admin,
+            family_connected_devices=family,
+            guest_connected_devices=guest,
         )
 
     def is_approved_user_present(self) -> bool:
         return self.get_presence_snapshot().approved_user_present
+
+    def _guest_expired(self, approved_at) -> bool:
+        t = approved_at
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        return utc_now() > t + timedelta(hours=GUEST_APPROVAL_HOURS)

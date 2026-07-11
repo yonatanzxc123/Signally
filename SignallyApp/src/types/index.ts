@@ -13,8 +13,9 @@ export interface Device {
   name: string;
   ip: string | null;
   status: DeviceStatus;
+  ownerRole: 'ADMIN' | 'FAMILY' | 'GUEST' | null;
   lastSeen: string;
-  vendor: string;
+  connected: boolean;
 }
 
 export interface NetworkEvent {

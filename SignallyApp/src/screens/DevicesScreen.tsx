@@ -27,7 +27,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 export default function DevicesScreen({ navigation }: Props) {
-  const { devices, approveDevice, approveAllUnknownDevices, blockDevice } = useDevices();
+  const { devices, approveDevice, approveAllUnknownDevices, blockDevice, canManageDevices } = useDevices();
   const [filter, setFilter] = useState<Filter>('all');
 
   const unknownCount = devices.filter((d) => d.status === 'unknown').length;
@@ -42,15 +42,25 @@ export default function DevicesScreen({ navigation }: Props) {
             <Text style={styles.headerCountText}>{devices.length}</Text>
           </View>
         </View>
-        {unknownCount > 0 && (
-          <TouchableOpacity
-            style={styles.approveAllButton}
-            onPress={approveAllUnknownDevices}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="checkmark-done-circle-outline" size={18} color={colors.surface} />
-            <Text style={styles.approveAllText}>Approve All</Text>
-          </TouchableOpacity>
+        {unknownCount > 0 && canManageDevices && (
+          <View style={styles.approveAllRow}>
+            <TouchableOpacity
+              style={[styles.approveAllButton, { backgroundColor: colors.approved }]}
+              onPress={() => approveAllUnknownDevices('FAMILY')}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="people-outline" size={14} color={colors.surface} />
+              <Text style={styles.approveAllText}>All Family</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.approveAllButton, { backgroundColor: colors.accent }]}
+              onPress={() => approveAllUnknownDevices('GUEST')}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="person-add-outline" size={14} color={colors.surface} />
+              <Text style={styles.approveAllText}>All Guest</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -97,6 +107,7 @@ export default function DevicesScreen({ navigation }: Props) {
               device={device}
               onApprove={approveDevice}
               onBlock={blockDevice}
+              canManage={canManageDevices}
               onPress={(id) => navigation.navigate('DeviceDetail', { deviceId: id })}
             />
           ))
@@ -143,6 +154,10 @@ const styles = StyleSheet.create({
     color: colors.surface,
     fontSize: font.sm,
     fontWeight: '700',
+  },
+  approveAllRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
   },
   approveAllButton: {
     flexDirection: 'row',

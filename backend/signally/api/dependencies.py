@@ -12,6 +12,8 @@ from signally.services.correlation_service import CorrelationService
 from signally.services.device_service import DeviceService
 from signally.services.event_service import EventService
 from signally.services.presence_service import PresenceService
+from signally.services.security_mode_service import SecurityModeService
+from signally.services.user_service import UserService
 from signally.wifi_probing.wifi_probing_state import WifiProbingState
 from signally.sensors.csi_provider import AutoFallbackCsiProvider
 
@@ -27,15 +29,19 @@ def get_db_session() -> Session:
 def build_services(session: Session) -> dict:
     event_service = EventService(session)
     device_service = DeviceService(session)
+    user_service = UserService(session)
     presence_service = PresenceService(session)
+    security_mode_service = SecurityModeService(session)
     correlation_service = CorrelationService()
     alert_service = AlertService(event_service)
-    admin_manager = AdminManager(device_service, event_service)
+    admin_manager = AdminManager(device_service, event_service, user_service)
 
     return {
         "event_service": event_service,
         "device_service": device_service,
         "presence_service": presence_service,
+        "security_mode_service": security_mode_service,
+        "user_service": user_service,
         "correlation_service": correlation_service,
         "alert_service": alert_service,
         "admin_manager": admin_manager,

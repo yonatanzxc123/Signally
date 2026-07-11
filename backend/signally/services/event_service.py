@@ -4,13 +4,10 @@ Service for writing and reading events.
 
 from typing import List, Optional, Sequence
 
-from datetime import timedelta
-
-from sqlalchemy import and_, desc, func, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from signally.models.event import Event
-from signally.utils.time_utils import utc_now
 
 
 class EventService:
@@ -40,28 +37,6 @@ class EventService:
             .limit(limit)
         )
         return list(self.session.scalars(stmt).all())
-
-    def find_recent_probe_event_by_ssid(
-        self,
-        ssid: str,
-        event_types: Sequence[str],
-        window_seconds: int = 60,
-    ) -> Optional[Event]:
-        since = utc_now() - timedelta(seconds=window_seconds)
-        stmt = (
-            select(Event)
-            .where(
-                and_(
-                    Event.event_type.in_(list(event_types)),
-                    Event.created_at >= since,
-                    Event.details.like(f'%ssid={ssid}%'),
-                    Event.device_mac.isnot(None),
-                )
-            )
-            .order_by(desc(Event.created_at))
-            .limit(1)
-        )
-        return self.session.scalar(stmt)
 
     def list_events_for_device_by_types(
         self,

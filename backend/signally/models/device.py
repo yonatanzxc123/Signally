@@ -33,3 +33,5 @@ class Device(Base):
         nullable=False,
         default=DeviceStatus.PENDING,
     )
+    owner_role: Mapped[str] = mapped_column(String(20), nullable=True)
+    approved_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)

@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   View,
   Text,
   TextInput,
@@ -13,9 +14,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, font, radius, spacing } from '../theme';
+import { ApiAuthResponse, ApiUserRole, api } from '../api/client';
 
 interface Props {
-  onAuth: () => void;
+  onAuth: (response: ApiAuthResponse) => Promise<void>;
 }
 
 export default function AuthScreen({ onAuth }: Props) {
@@ -24,8 +26,10 @@ export default function AuthScreen({ onAuth }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [role, setRole] = useState<ApiUserRole>('ADMIN');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [toggleWidth, setToggleWidth] = useState(0);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -62,7 +66,7 @@ export default function AuthScreen({ onAuth }: Props) {
     });
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (mode === 'signup' && !name.trim()) {
       setError('Please enter your name.');
       return;
@@ -75,9 +79,22 @@ export default function AuthScreen({ onAuth }: Props) {
       setError('Passwords do not match.');
       return;
     }
+    if (mode === 'signup' && password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
     setError('');
-    // TODO: replace with POST /auth/login or POST /auth/signup — store returned JWT token in SecureStore
-    onAuth();
+    setLoading(true);
+    try {
+      const result = mode === 'signup'
+        ? await api.signup({ display_name: name, email, password, confirm_password: confirmPassword, role })
+        : await api.login({ email, password });
+      await onAuth(result);
+    } catch (e: any) {
+      setError(e.message ?? 'Something went wrong.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   const isLogin = mode === 'login';
@@ -132,6 +149,22 @@ export default function AuthScreen({ onAuth }: Props) {
             <Animated.View
               style={{ opacity: formOpacity, transform: [{ translateX: formTranslate }] }}
             >
+              {!isLogin && (
+                <View style={styles.roleToggle}>
+                  {(['ADMIN', 'FAMILY'] as ApiUserRole[]).map((nextRole) => (
+                    <TouchableOpacity
+                      key={nextRole}
+                      style={[styles.roleBtn, role === nextRole && styles.roleBtnActive]}
+                      onPress={() => setRole(nextRole)}
+                    >
+                      <Text style={[styles.roleText, role === nextRole && styles.roleTextActive]}>
+                        {nextRole === 'ADMIN' ? 'Admin' : 'Family'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
               {!isLogin && (
                 <>
                   <Text style={styles.label}>Name</Text>
@@ -194,15 +227,13 @@ export default function AuthScreen({ onAuth }: Props) {
 
               {error ? <Text style={styles.error}>{error}</Text> : null}
 
-              <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-                <Text style={styles.submitBtnText}>{isLogin ? 'Log In' : 'Create Account'}</Text>
+              <TouchableOpacity style={[styles.submitBtn, loading && { opacity: 0.7 }]} onPress={handleSubmit} disabled={loading}>
+                {loading
+                  ? <ActivityIndicator color={colors.surface} />
+                  : <Text style={styles.submitBtnText}>{isLogin ? 'Log In' : 'Create Account'}</Text>
+                }
               </TouchableOpacity>
 
-              {isLogin && (
-                <TouchableOpacity>
-                  <Text style={styles.forgotText}>Forgot password?</Text>
-                </TouchableOpacity>
-              )}
             </Animated.View>
           </View>
         </ScrollView>
@@ -285,6 +316,31 @@ const styles = StyleSheet.create({
   toggleTextActive: {
     color: colors.primary,
   },
+  roleToggle: {
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+    borderRadius: radius.sm,
+    padding: 4,
+    marginBottom: spacing.md,
+    gap: 4,
+  },
+  roleBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: radius.sm - 2,
+  },
+  roleBtnActive: {
+    backgroundColor: colors.primary,
+  },
+  roleText: {
+    fontSize: font.sm,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  roleTextActive: {
+    color: colors.surface,
+  },
   label: {
     fontSize: font.sm,
     fontWeight: '600',
@@ -329,11 +385,5 @@ const styles = StyleSheet.create({
     fontSize: font.lg,
     fontWeight: '700',
     letterSpacing: 0.5,
-  },
-  forgotText: {
-    textAlign: 'center',
-    marginTop: spacing.md,
-    fontSize: font.md,
-    color: colors.textSecondary,
   },
 });
