@@ -1,6 +1,7 @@
 """Database initialization helper."""
 
 from signally.db.base import Base
+from signally.models.csi_baseline import CsiBaseline
 from signally.db.session import engine
 from signally.models.device import Device
 from signally.models.event import Event
@@ -13,5 +14,5 @@ def initialize_database() -> None:
     Create database tables if they do not already exist.
     """
 
-    _ = Device, Event, SecurityState, User
+    _ = CsiBaseline, Device, Event, SecurityState, User
     Base.metadata.create_all(bind=engine)

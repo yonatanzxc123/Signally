@@ -1,18 +1,16 @@
-"""
-CSI presence provider abstractions.
-"""
+"""CSI presence provider abstractions."""
+
+from __future__ import annotations
 
 from typing import Optional
-import threading
-import socket
-import struct
-import math
-import logging
-import time
+
+from sqlalchemy.orm import Session
 
 from signally.config import CSI_REAL_PROVIDER_ENABLED
+from signally.models.csi_baseline import CsiBaseline
+from signally.sensors.nexmon.nexmon_provider import NexmonCsiProvider
+from signally.sensors.sensing_snapshot import SensingProviderStatus, SensingSnapshot
 
-logger = logging.getLogger(__name__)
 
 class CsiDetectionProvider:
     def is_presence_detected(self) -> bool:
@@ -21,9 +19,13 @@ class CsiDetectionProvider:
     def get_presence_strength(self) -> Optional[float]:
         return None
 
-# --- MOCK PROVIDER (For Presentation & Testing) ---
+    def get_snapshot(self, session: Optional[Session] = None) -> SensingSnapshot:
+        return SensingSnapshot.mock()
+
 
 class FlagCsiDetectionProvider(CsiDetectionProvider):
+    """Manual/mock CSI provider for tests and classroom fallback demos."""
+
     def __init__(self, detected: bool = False, strength: Optional[float] = None) -> None:
         self._detected = detected
         self._strength = strength
@@ -34,126 +36,87 @@ class FlagCsiDetectionProvider(CsiDetectionProvider):
     def get_presence_strength(self) -> Optional[float]:
         return self._strength
 
+    def get_snapshot(self, session: Optional[Session] = None) -> SensingSnapshot:
+        return SensingSnapshot.mock(
+            detected=self._detected,
+            confidence=self._strength,
+            status=SensingProviderStatus.MOCK,
+            reason="Mock CSI provider is active. No real Nexmon packets are being used.",
+        )
+
     def set_detected(self, value: bool) -> None:
         self._detected = value
+        if value and self._strength is None:
+            self._strength = 1.0
 
     def set_strength(self, value: Optional[float]) -> None:
         self._strength = value
 
 
-# --- REAL PROVIDER (For Raspberry Pi Integration) ---
-
-class RealCsiDetectionProvider(CsiDetectionProvider):
-    def __init__(self, udp_ip: str = "127.0.0.1", udp_port: int = 5500, threshold: float = 15.0) -> None:
-        self._detected = False
-        self._strength = 0.0
-        self.threshold = threshold
-        
-        self.udp_ip = udp_ip
-        self.udp_port = udp_port
-        self._last_packet_time = 0.0   # Track when we last got data
-        
-        self._stop_event = threading.Event()
-        self._thread = threading.Thread(target=self._capture_loop, daemon=True)
-        self._thread.start()
-
-    def is_receiving_data(self) -> bool:    
-        # Returns True if  a real CSI packet was recived in the last 3 seconds, otherwise False.
-        return (time.time() - self._last_packet_time) < 3.0 
-
-    def is_presence_detected(self) -> bool:
-        return self._detected
-
-    def get_presence_strength(self) -> Optional[float]:
-        return self._strength
-        
-    def stop(self) -> None:
-        self._stop_event.set()
-        if self._thread.is_alive():
-            self._thread.join(timeout=2.0)
-
-    def _capture_loop(self) -> None:
-        """
-        Background thread listening to Nexmon CSI UDP stream.
-        """
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(1.0)
-        
-        try:
-            sock.bind((self.udp_ip, self.udp_port))
-            logger.info("Real CSI Provider listening on %s:%s", self.udp_ip, self.udp_port)
-        except Exception as e:
-            logger.error("Failed to bind CSI socket: %s", e)
-            return
-
-        # Rolling window to calculate signal variance
-        window_size = 50
-        variance_history = []
-
-        while not self._stop_event.is_set():
-            try:
-                data, _ = sock.recvfrom(4096)
-                self._last_packet_time = time.time()
-                
-                # NOTE: Nexmon payloads require specific struct unpacking.
-                # Example: bypassing the MAC header and extracting complex numbers (I & Q)
-                # i_val, q_val = struct.unpack('hh', data[some_offset:some_offset+4])
-                
-                # --- TEMPLATE MATH LOGIC ---
-                # 1. Extract I (In-phase) and Q (Quadrature) from raw memory bytes.
-                # 2. Calculate Amplitude: amplitude = math.sqrt(I**2 + Q**2)
-                # 3. Calculate Variance of the amplitude over the last N packets.
-                
-                # Dummy variance calculation to keep the loop valid until hardware arrives
-                current_variance = 0.0  
-                
-                self._strength = current_variance
-                
-                # If the variance spikes above the baseline threshold, someone is moving
-                if current_variance > self.threshold:
-                    self._detected = True
-                else:
-                    self._detected = False
-
-            except socket.timeout:
-                # Normal behavior if no packets are being sent
-                continue
-            except Exception as e:
-                logger.error("CSI Stream Error: %s", e)
-                
-        sock.close()
-    
-    def set_detected(self, value: bool) -> None:
-       # Safety method to prevent crashes during manual testing.
-        self._detected = value
+class RealCsiDetectionProvider(NexmonCsiProvider):
+    """Compatibility alias for the real Nexmon-backed provider."""
 
 
-
-
-# Auto-fallback to "not detected" if we haven't received any data for a while
 class AutoFallbackCsiProvider(CsiDetectionProvider):
     def __init__(self, real_enabled: bool = CSI_REAL_PROVIDER_ENABLED):
-        self.real = RealCsiDetectionProvider() if real_enabled else None
+        self.real = RealCsiDetectionProvider(auto_start=True) if real_enabled else None
         self.mock = FlagCsiDetectionProvider()
+        self._mock_override_active = False
+
+    def get_snapshot(self, session: Optional[Session] = None) -> SensingSnapshot:
+        if self.real is None:
+            return self.mock.get_snapshot(session)
+
+        real_snapshot = self.real.get_snapshot(session)
+        if self._mock_override_active and real_snapshot.provider_status != SensingProviderStatus.OK:
+            mock_snapshot = self.mock.get_snapshot(session)
+            mock_snapshot.provider_status = SensingProviderStatus.FALLBACK
+            mock_snapshot.reason = (
+                "Mock CSI fallback is active because real Nexmon CSI is not ready: {0}".format(
+                    real_snapshot.provider_status
+                )
+            )
+            mock_snapshot.raw_summary["real_provider_status"] = real_snapshot.provider_status
+            return mock_snapshot
+
+        return real_snapshot
 
     def is_presence_detected(self) -> bool:
-        # If the Pi is actually sending data, use it. Otherwise, use Mock.
-        if self.real is not None and self.real.is_receiving_data():
-            return self.real.is_presence_detected()
-        # Automatically fall back if the Pi is off!
-        return self.mock.is_presence_detected()
+        return self.get_snapshot().presence_detected
 
     def get_presence_strength(self) -> Optional[float]:
-        if self.real is not None and self.real.is_receiving_data():
-            return self.real.get_presence_strength()
-        return self.mock.get_presence_strength()
+        return self.get_snapshot().confidence
 
     def set_detected(self, value: bool) -> None:
-        # Route your Swagger API testing clicks to the mock provider
+        self._mock_override_active = True
         self.mock.set_detected(value)
-        
+
     def set_strength(self, value: Optional[float]) -> None:
+        self._mock_override_active = True
         self.mock.set_strength(value)
+
+    def clear_mock_override(self) -> None:
+        self._mock_override_active = False
+
+    def start_calibration(self) -> dict:
+        if self.real is None:
+            raise RuntimeError("Real Nexmon CSI provider is disabled.")
+        return self.real.start_calibration()
+
+    def stop_calibration(self, session: Session) -> CsiBaseline:
+        if self.real is None:
+            raise RuntimeError("Real Nexmon CSI provider is disabled.")
+        return self.real.stop_calibration(session)
+
+    def get_baseline(self, session: Session) -> Optional[CsiBaseline]:
+        if self.real is None:
+            return None
+        return self.real.get_baseline(session)
+
+    def delete_baseline(self, session: Session) -> int:
+        if self.real is None:
+            return 0
+        return self.real.delete_baseline(session)
 
     def stop(self) -> None:
         if self.real is not None:

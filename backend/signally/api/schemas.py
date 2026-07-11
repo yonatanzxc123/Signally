@@ -3,7 +3,7 @@ Pydantic schemas for the Signally API.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -44,11 +44,45 @@ class MessageResponse(BaseModel):
 
 class SetCsiPresenceRequest(BaseModel):
     detected: bool
+    confidence: Optional[float] = None
 
 
 class CsiPresenceResponse(BaseModel):
     detected: bool
     strength: Optional[float]
+
+
+class SensingSnapshotResponse(BaseModel):
+    source: str
+    provider_status: str
+    presence_detected: bool
+    confidence: float
+    baseline_deviation: Optional[float] = None
+    packets_per_second: float
+    last_packet_age_ms: Optional[int] = None
+    reason: str
+    timestamp: datetime
+    raw_summary: dict[str, Any] = {}
+
+
+class CsiCalibrationStartResponse(BaseModel):
+    source: str
+    started_at: datetime
+    message: str
+
+
+class CsiBaselineResponse(BaseModel):
+    id: int
+    source: str
+    provider_metadata: Optional[str] = None
+    mean_amplitude: float
+    variance: float
+    stddev: float
+    mean_abs_delta: float
+    threshold: float
+    sample_count: int
+    packet_count: int
+    created_at: datetime
 
 
 class SystemStateResponse(BaseModel):
@@ -57,6 +91,10 @@ class SystemStateResponse(BaseModel):
     security_mode_updated_by_role: Optional[str] = None
     security_mode_updated_at: Optional[datetime] = None
     csi_presence_detected: bool
+    csi_provider_status: str = "MOCK"
+    csi_confidence: float = 0.0
+    csi_baseline_deviation: Optional[float] = None
+    sensing: SensingSnapshotResponse
     approved_user_present: bool
     admin_present: bool = False
     family_present: bool = False
@@ -77,6 +115,10 @@ class MonitoringCycleResponse(BaseModel):
     mode: str = "HOME"
     security_mode: str = "HOME"
     csi_presence_detected: bool
+    csi_provider_status: str = "MOCK"
+    csi_confidence: float = 0.0
+    csi_baseline_deviation: Optional[float] = None
+    sensing: SensingSnapshotResponse
     approved_user_present: bool
     admin_present: bool = False
     family_present: bool = False

@@ -37,6 +37,8 @@ from signally.api.dependencies import (
 from signally.api.schemas import (
     ApproveDeviceRequest,
     AuthResponse,
+    CsiBaselineResponse,
+    CsiCalibrationStartResponse,
     ConnectedInspectionResponse,
     DeviceResponse,
     EventResponse,
@@ -46,6 +48,7 @@ from signally.api.schemas import (
     SetSecurityModeRequest,
     SecurityModeResponse,
     SignupRequest,
+    SensingSnapshotResponse,
     WifiProbingStartRequest,
     WifiProbingStatusResponse,
     SystemStateResponse,
@@ -100,6 +103,37 @@ def to_security_mode_response(state) -> SecurityModeResponse:
         updated_at=state.updated_at,
     )
 
+
+def to_sensing_snapshot_response(snapshot) -> SensingSnapshotResponse:
+    return SensingSnapshotResponse(
+        source=snapshot.source,
+        provider_status=snapshot.provider_status,
+        presence_detected=snapshot.presence_detected,
+        confidence=snapshot.confidence,
+        baseline_deviation=snapshot.baseline_deviation,
+        packets_per_second=snapshot.packets_per_second,
+        last_packet_age_ms=snapshot.last_packet_age_ms,
+        reason=snapshot.reason,
+        timestamp=snapshot.timestamp,
+        raw_summary=snapshot.raw_summary,
+    )
+
+
+def to_csi_baseline_response(baseline) -> CsiBaselineResponse:
+    return CsiBaselineResponse(
+        id=baseline.id,
+        source=baseline.source,
+        provider_metadata=baseline.provider_metadata,
+        mean_amplitude=baseline.mean_amplitude,
+        variance=baseline.variance,
+        stddev=baseline.stddev,
+        mean_abs_delta=baseline.mean_abs_delta,
+        threshold=baseline.threshold,
+        sample_count=baseline.sample_count,
+        packet_count=baseline.packet_count,
+        created_at=baseline.created_at,
+    )
+
 def to_connected_inspection_response(result) -> ConnectedInspectionResponse:
     return ConnectedInspectionResponse(
         device_category=result.device_category,
@@ -125,6 +159,10 @@ def to_system_state_response(snapshot) -> SystemStateResponse:
         security_mode_updated_by_role=snapshot.security_state.updated_by_role,
         security_mode_updated_at=snapshot.security_state.updated_at,
         csi_presence_detected=snapshot.csi_presence_detected,
+        csi_provider_status=snapshot.sensing_snapshot.provider_status,
+        csi_confidence=snapshot.sensing_snapshot.confidence,
+        csi_baseline_deviation=snapshot.sensing_snapshot.baseline_deviation,
+        sensing=to_sensing_snapshot_response(snapshot.sensing_snapshot),
         approved_user_present=snapshot.connected_presence.approved_user_present,
         admin_present=snapshot.connected_presence.admin_present,
         family_present=snapshot.connected_presence.family_present,
@@ -155,6 +193,10 @@ def to_monitoring_cycle_response(snapshot) -> MonitoringCycleResponse:
         mode=mode,
         security_mode=mode,
         csi_presence_detected=snapshot.csi_presence_detected,
+        csi_provider_status=snapshot.sensing_snapshot.provider_status,
+        csi_confidence=snapshot.sensing_snapshot.confidence,
+        csi_baseline_deviation=snapshot.sensing_snapshot.baseline_deviation,
+        sensing=to_sensing_snapshot_response(snapshot.sensing_snapshot),
         approved_user_present=snapshot.connected_presence.approved_user_present,
         admin_present=snapshot.connected_presence.admin_present,
         family_present=snapshot.connected_presence.family_present,
@@ -682,15 +724,71 @@ def add_mock_wifi_probe_detection(
 @app.post("/csi/set", response_model=MessageResponse)
 def set_csi_presence(request: SetCsiPresenceRequest):
     csi_provider.set_detected(request.detected)
+    if request.confidence is not None and hasattr(csi_provider, "set_strength"):
+        csi_provider.set_strength(request.confidence)
     return MessageResponse(message="CSI presence set to {0}.".format(request.detected))
 
 
-@app.get("/csi/status")
+@app.get("/csi/status", response_model=SensingSnapshotResponse)
 def get_csi_status():
-    return {
-        "presence_detected": csi_provider.is_presence_detected(),
-        "presence_strength": csi_provider.get_presence_strength(),
-    }
+    session = get_db_session()
+    try:
+        return to_sensing_snapshot_response(csi_provider.get_snapshot(session))
+    finally:
+        session.close()
+
+
+@app.get("/csi/snapshot", response_model=SensingSnapshotResponse)
+def get_csi_snapshot():
+    session = get_db_session()
+    try:
+        return to_sensing_snapshot_response(csi_provider.get_snapshot(session))
+    finally:
+        session.close()
+
+
+@app.post("/csi/calibration/start", response_model=CsiCalibrationStartResponse)
+def start_csi_calibration():
+    try:
+        result = csi_provider.start_calibration()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return CsiCalibrationStartResponse(**result)
+
+
+@app.post("/csi/calibration/stop", response_model=CsiBaselineResponse)
+def stop_csi_calibration():
+    session = get_db_session()
+    try:
+        try:
+            baseline = csi_provider.stop_calibration(session)
+        except (RuntimeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        return to_csi_baseline_response(baseline)
+    finally:
+        session.close()
+
+
+@app.get("/csi/baseline", response_model=CsiBaselineResponse)
+def get_csi_baseline():
+    session = get_db_session()
+    try:
+        baseline = csi_provider.get_baseline(session)
+        if baseline is None:
+            raise HTTPException(status_code=404, detail="CSI baseline has not been calibrated.")
+        return to_csi_baseline_response(baseline)
+    finally:
+        session.close()
+
+
+@app.delete("/csi/baseline", response_model=MessageResponse)
+def delete_csi_baseline():
+    session = get_db_session()
+    try:
+        deleted_count = csi_provider.delete_baseline(session)
+        return MessageResponse(message="Deleted {0} CSI baseline(s).".format(deleted_count))
+    finally:
+        session.close()
 
 
 @app.get("/system/state", response_model=SystemStateResponse)

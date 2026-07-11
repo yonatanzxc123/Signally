@@ -10,6 +10,7 @@ const BASE_URL =
 export type BackendDeviceStatus = 'PENDING' | 'AUTHORIZED' | 'BLOCKED';
 export type ApiUserRole = 'ADMIN' | 'FAMILY' | 'GUEST';
 export type ApiSecurityMode = 'HOME' | 'AWAY';
+export type ApiCsiProviderStatus = 'OK' | 'NO_DATA' | 'NO_BASELINE' | 'ERROR' | 'MOCK' | 'FALLBACK';
 
 export interface ApiAuthResponse {
   token: string;
@@ -49,12 +50,49 @@ export interface ApiEvent {
   created_at: string;
 }
 
+export interface ApiSensingSnapshot {
+  source: string;
+  provider_status: ApiCsiProviderStatus;
+  presence_detected: boolean;
+  confidence: number;
+  baseline_deviation: number | null;
+  packets_per_second: number;
+  last_packet_age_ms: number | null;
+  reason: string;
+  timestamp: string;
+  raw_summary: Record<string, unknown>;
+}
+
+export interface ApiCsiCalibrationStart {
+  source: string;
+  started_at: string;
+  message: string;
+}
+
+export interface ApiCsiBaseline {
+  id: number;
+  source: string;
+  provider_metadata: string | null;
+  mean_amplitude: number;
+  variance: number;
+  stddev: number;
+  mean_abs_delta: number;
+  threshold: number;
+  sample_count: number;
+  packet_count: number;
+  created_at: string;
+}
+
 export interface ApiSystemState {
   mode: ApiSecurityMode;
   security_mode: ApiSecurityMode;
   security_mode_updated_by_role: ApiUserRole | 'SYSTEM' | null;
   security_mode_updated_at: string | null;
   csi_presence_detected: boolean;
+  csi_provider_status: ApiCsiProviderStatus;
+  csi_confidence: number;
+  csi_baseline_deviation: number | null;
+  sensing: ApiSensingSnapshot;
   approved_user_present: boolean;
   admin_present: boolean;
   family_present: boolean;
@@ -76,6 +114,10 @@ export interface ApiMonitoringCycle {
   mode: ApiSecurityMode;
   security_mode: ApiSecurityMode;
   csi_presence_detected: boolean;
+  csi_provider_status: ApiCsiProviderStatus;
+  csi_confidence: number;
+  csi_baseline_deviation: number | null;
+  sensing: ApiSensingSnapshot;
   approved_user_present: boolean;
   admin_present: boolean;
   family_present: boolean;
@@ -195,6 +237,15 @@ export const api = {
   getSystemState: () => request<ApiSystemState>('/system/state'),
   runMonitoringCycle: () =>
     request<ApiMonitoringCycle>('/monitoring/run-cycle', { method: 'POST' }),
+
+  // CSI
+  getCsiSnapshot: () => request<ApiSensingSnapshot>('/csi/snapshot'),
+  startCsiCalibration: () =>
+    request<ApiCsiCalibrationStart>('/csi/calibration/start', { method: 'POST' }),
+  stopCsiCalibration: () =>
+    request<ApiCsiBaseline>('/csi/calibration/stop', { method: 'POST' }),
+  getCsiBaseline: () => request<ApiCsiBaseline>('/csi/baseline'),
+  deleteCsiBaseline: () => request<ApiMessage>('/csi/baseline', { method: 'DELETE' }),
 
   // Admin
   clearAllDevices: () => request<ApiMessage>('/admin/devices', { method: 'DELETE' }),

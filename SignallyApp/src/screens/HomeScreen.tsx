@@ -85,6 +85,17 @@ export default function HomeScreen() {
     },
   });
 
+  const csiCalibrationMutation = useMutation({
+    mutationFn: async () => {
+      const rawSummary = systemState?.sensing?.raw_summary as { calibrating?: unknown } | undefined;
+      const calibrating = Boolean(rawSummary?.calibrating);
+      return calibrating ? api.stopCsiCalibration() : api.startCsiCalibration();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-state'] });
+    },
+  });
+
   const { data: systemState } = useQuery({
     queryKey: ['system-state'],
     queryFn: api.getSystemState,
@@ -102,6 +113,13 @@ export default function HomeScreen() {
   const securityMode = systemState?.security_mode ?? 'HOME';
   const canChangeSecurityMode = role === 'ADMIN' || role === 'FAMILY';
   const modeSegmentWidth = modeControlWidth > 0 ? (modeControlWidth - 8) / 2 : 0;
+  const sensing = systemState?.sensing;
+  const csiStatus = sensing?.provider_status ?? 'MOCK';
+  const csiConfidence = Math.round((sensing?.confidence ?? 0) * 100);
+  const csiDeviation = sensing?.baseline_deviation;
+  const csiRawSummary = sensing?.raw_summary as { calibrating?: unknown } | undefined;
+  const csiCalibrating = Boolean(csiRawSummary?.calibrating);
+  const canCalibrateCsi = sensing?.source === 'NEXMON';
 
   useEffect(() => {
     Animated.timing(modeAnim, {
@@ -304,6 +322,98 @@ export default function HomeScreen() {
               Unknown {systemState?.unknown_devices ?? 0} - Nearby probes {systemState?.nearby_probe_count ?? 0} - Alerts {systemState?.recent_alerts?.length ?? 0}
             </Text>
           </View>
+        </View>
+
+        <View style={styles.csiPanel}>
+          <View style={styles.csiHeader}>
+            <View style={styles.csiTitleWrap}>
+              <Text style={styles.csiTitle}>CSI Sensing</Text>
+              <Text style={styles.csiMeta}>
+                {sensing?.source ?? 'MOCK'} - {csiStatus}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.csiStatusBadge,
+                csiStatus === 'OK'
+                  ? styles.csiStatusOk
+                  : csiStatus === 'ERROR'
+                  ? styles.csiStatusError
+                  : styles.csiStatusPending,
+              ]}
+            >
+              <Ionicons
+                name={
+                  csiStatus === 'OK'
+                    ? 'pulse-outline'
+                    : csiStatus === 'ERROR'
+                    ? 'alert-circle-outline'
+                    : 'radio-outline'
+                }
+                size={14}
+                color={
+                  csiStatus === 'OK'
+                    ? colors.approved
+                    : csiStatus === 'ERROR'
+                    ? colors.alert
+                    : colors.unknown
+                }
+              />
+              <Text
+                style={[
+                  styles.csiStatusText,
+                  {
+                    color:
+                      csiStatus === 'OK'
+                        ? colors.approved
+                        : csiStatus === 'ERROR'
+                        ? colors.alert
+                        : colors.unknown,
+                  },
+                ]}
+              >
+                {csiStatus}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.csiReason}>
+            {sensing?.reason ?? 'CSI provider status is not available yet.'}
+          </Text>
+          <View style={styles.csiMetricsRow}>
+            <Text style={styles.csiMetric}>Confidence {csiConfidence}%</Text>
+            <Text style={styles.csiMetric}>
+              Deviation {csiDeviation == null ? 'n/a' : csiDeviation.toFixed(1)}
+            </Text>
+            <Text style={styles.csiMetric}>
+              Rate {(sensing?.packets_per_second ?? 0).toFixed(1)}/s
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.csiCalibrationButton,
+              csiCalibrating && styles.csiCalibrationButtonActive,
+              !canCalibrateCsi && styles.csiCalibrationButtonDisabled,
+            ]}
+            onPress={() => csiCalibrationMutation.mutate()}
+            disabled={csiCalibrationMutation.isPending || !canCalibrateCsi}
+          >
+            {csiCalibrationMutation.isPending ? (
+              <ActivityIndicator size="small" color={colors.surface} />
+            ) : (
+              <Ionicons
+                name={csiCalibrating ? 'save-outline' : 'analytics-outline'}
+                size={16}
+                color={colors.surface}
+              />
+            )}
+            <Text style={styles.csiCalibrationText}>
+              {!canCalibrateCsi
+                ? 'Real CSI Required'
+                : csiCalibrating
+                ? 'Save Baseline'
+                : 'Start CSI Calibration'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.statsRow}>
@@ -580,6 +690,93 @@ const styles = StyleSheet.create({
   decisionMeta: {
     fontSize: font.sm,
     color: colors.textMuted,
+  },
+  csiPanel: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  csiHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  csiTitleWrap: {
+    flex: 1,
+  },
+  csiTitle: {
+    fontSize: font.lg,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  csiMeta: {
+    fontSize: font.sm,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  csiStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+  },
+  csiStatusOk: {
+    backgroundColor: colors.approvedLight,
+  },
+  csiStatusPending: {
+    backgroundColor: colors.unknownLight,
+  },
+  csiStatusError: {
+    backgroundColor: colors.alertLight,
+  },
+  csiStatusText: {
+    fontSize: font.sm,
+    fontWeight: '800',
+  },
+  csiReason: {
+    fontSize: font.md,
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
+  },
+  csiMetricsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  csiMetric: {
+    fontSize: font.sm,
+    color: colors.textMuted,
+  },
+  csiCalibrationButton: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: radius.sm,
+    gap: spacing.xs,
+  },
+  csiCalibrationButtonActive: {
+    backgroundColor: colors.secure,
+  },
+  csiCalibrationButtonDisabled: {
+    opacity: 0.55,
+  },
+  csiCalibrationText: {
+    color: colors.surface,
+    fontSize: font.md,
+    fontWeight: '700',
   },
   statsRow: {
     flexDirection: 'row',

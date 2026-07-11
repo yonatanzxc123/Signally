@@ -31,6 +31,12 @@ class CorrelationService:
             + nearby_probe_count
             + (1 if csi_detected and not approved_present else 0)
         )
+        csi_only_presence = (
+            csi_detected
+            and not approved_present
+            and connected_intruder_count == 0
+            and nearby_probe_count == 0
+        )
         review_grace_active = self._is_admin_review_grace_active(context)
 
         # 1. CRITICAL: Blocked device on the network
@@ -53,10 +59,15 @@ class CorrelationService:
         # 2. HOME: unknown connected device — soft review, no loud alert
         if current_intruder_count > 0 and not away_mode:
             audience = ["ADMIN"] if review_grace_active else ["ADMIN", "FAMILY"]
+            reason = (
+                "CSI-based presence detected while Home mode is active."
+                if csi_only_presence
+                else "Unknown activity detected while Home mode is active."
+            )
             return CorrelationDecision(
                 decision="REVIEW",
                 severity="MEDIUM",
-                reason="Unknown activity detected while Home mode is active.",
+                reason=reason,
                 security_mode=security_mode,
                 csi_presence_detected=csi_detected,
                 nearby_device_count=context.nearby_device_count,
@@ -89,10 +100,15 @@ class CorrelationService:
 
         # 4. AWAY ALERT: unknown connected device, no grace or no admin
         if current_intruder_count > 0:
+            reason = "Suspicious activity detected while Away mode is active."
+            if csi_only_presence:
+                reason = "CSI-based presence detected while Away mode is active."
+            elif connected_intruder_count == 0 and nearby_probe_count > 0:
+                reason = "Unknown nearby device activity detected while Away mode is active."
             return CorrelationDecision(
                 decision="ALERT",
                 severity="HIGH" if csi_detected else "MEDIUM",
-                reason="Suspicious activity detected while Away mode is active.",
+                reason=reason,
                 security_mode=security_mode,
                 csi_presence_detected=csi_detected,
                 nearby_device_count=context.nearby_device_count,

@@ -8,6 +8,7 @@ from typing import List, Optional
 
 from signally.models.device import Device
 from signally.models.security_mode import SecurityMode
+from signally.sensors.sensing_snapshot import SensingSnapshot
 
 
 
@@ -52,6 +53,7 @@ class CorrelationContext:
     connected_presence: ConnectedPresenceSnapshot
     nearby_presence: NearbyPresenceSnapshot = field(default_factory=NearbyPresenceSnapshot)
     security_mode: SecurityMode = SecurityMode.HOME
+    sensing_snapshot: Optional[SensingSnapshot] = None
 
 
 @dataclass
