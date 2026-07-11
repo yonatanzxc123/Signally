@@ -103,6 +103,7 @@ export default function HomeScreen() {
   const shouldNotifyRole =
     intruderCount > 0 &&
     (systemState?.notification_audience ?? []).includes(role);
+  const hasVisibleUnknownActivity = intruderCount > 0 || hasUnknown;
   const recentEvents = events.slice(0, 5);
   const scanning = scanMutation.isPending;
   const securityMode = systemState?.security_mode ?? 'HOME';
@@ -173,7 +174,7 @@ export default function HomeScreen() {
         bounces={false}
       >
         <StatusCard
-          hasUnknown={shouldNotifyRole || (!systemState && hasUnknown)}
+          hasUnknown={hasVisibleUnknownActivity}
           deviceCount={devices.length}
           securityMode={securityMode}
         />
