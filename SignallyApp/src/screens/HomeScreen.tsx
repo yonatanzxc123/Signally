@@ -51,12 +51,13 @@ export default function HomeScreen() {
         if (!old) return old;
         return {
           ...old,
+          mode,
           security_mode: mode,
           security_mode_updated_by_role: role,
           security_mode_updated_at: now,
           decision:
             mode === 'HOME' && old.decision === 'ALERT'
-              ? 'HOME_REVIEW'
+              ? 'REVIEW'
               : old.decision,
           reason:
             mode === 'HOME' && old.decision === 'ALERT'
@@ -169,6 +170,7 @@ export default function HomeScreen() {
           hasUnknown={shouldNotifyRole || (!systemState && hasUnknown)}
           deviceCount={devices.length}
           securityMode={securityMode}
+          decision={systemState?.decision}
         />
 
         <View style={styles.modePanel}>
@@ -244,6 +246,63 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               );
             })}
+          </View>
+        </View>
+
+        <View style={styles.decisionPanel}>
+          <View
+            style={[
+              styles.decisionIcon,
+              systemState?.decision === 'ALERT'
+                ? styles.decisionIconAlert
+                : systemState?.decision === 'REVIEW'
+                ? styles.decisionIconReview
+                : styles.decisionIconSafe,
+            ]}
+          >
+            <Ionicons
+              name={
+                systemState?.decision === 'ALERT'
+                  ? 'warning-outline'
+                  : systemState?.decision === 'REVIEW'
+                  ? 'help-circle-outline'
+                  : 'shield-checkmark-outline'
+              }
+              size={20}
+              color={
+                systemState?.decision === 'ALERT'
+                  ? colors.alert
+                  : systemState?.decision === 'REVIEW'
+                  ? colors.unknown
+                  : colors.approved
+              }
+            />
+          </View>
+          <View style={styles.decisionBody}>
+            <View style={styles.decisionHeader}>
+              <Text style={styles.decisionLabel}>Correlation</Text>
+              <Text
+                style={[
+                  styles.decisionValue,
+                  {
+                    color:
+                      systemState?.decision === 'ALERT'
+                        ? colors.alert
+                        : systemState?.decision === 'REVIEW'
+                        ? colors.unknown
+                        : colors.approved,
+                  },
+                ]}
+              >
+                {systemState?.decision ?? 'SAFE'}
+              </Text>
+            </View>
+            <Text style={styles.decisionReason}>
+              {systemState?.reason ?? 'Waiting for backend state.'}
+            </Text>
+            <Text style={styles.decisionMeta}>
+              Unknown {systemState?.unknown_devices ?? 0} - Nearby probes {systemState?.nearby_probe_count ?? 0} - Alerts {systemState?.recent_alerts?.length ?? 0}
+            </Text>
           </View>
         </View>
 
@@ -462,6 +521,65 @@ const styles = StyleSheet.create({
   },
   modeButtonTextActive: {
     color: colors.surface,
+  },
+  decisionPanel: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  decisionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  decisionIconSafe: {
+    backgroundColor: colors.approvedLight,
+  },
+  decisionIconReview: {
+    backgroundColor: colors.unknownLight,
+  },
+  decisionIconAlert: {
+    backgroundColor: colors.alertLight,
+  },
+  decisionBody: {
+    flex: 1,
+  },
+  decisionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  decisionLabel: {
+    fontSize: font.sm,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+  },
+  decisionValue: {
+    fontSize: font.md,
+    fontWeight: '800',
+  },
+  decisionReason: {
+    fontSize: font.md,
+    color: colors.textPrimary,
+    fontWeight: '500',
+    marginBottom: spacing.xs,
+  },
+  decisionMeta: {
+    fontSize: font.sm,
+    color: colors.textMuted,
   },
   statsRow: {
     flexDirection: 'row',

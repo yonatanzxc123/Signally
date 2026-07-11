@@ -33,19 +33,43 @@ class AlertService:
             details=message,
         )
 
-    def raise_unauthorized_presence_alert(self, device_mac: Optional[str] = None) -> None:
-        message = "Presence detected while no approved user is home and an unknown/pending device is present."
+    def raise_unauthorized_presence_alert(
+        self,
+        device_mac: Optional[str] = None,
+        details: Optional[str] = None,
+        cooldown_seconds: int = 0,
+    ):
+        message = details or "Presence detected while no approved user is home and an unknown/pending device is present."
         print("[ALERT] {0}".format(message))
-        self.event_service.log_event(
+        if cooldown_seconds > 0:
+            return self.event_service.log_event_once(
+                event_type=EVENT_UNAUTHORIZED_PRESENCE_ALERT,
+                details=message,
+                device_mac=device_mac,
+                cooldown_seconds=cooldown_seconds,
+            )
+        return self.event_service.log_event(
             event_type=EVENT_UNAUTHORIZED_PRESENCE_ALERT,
             details=message,
             device_mac=device_mac,
         )
 
-    def raise_blocked_device_alert(self, device_mac: Optional[str] = None) -> None:
-        message = "Blocked device detected while presence is active."
+    def raise_blocked_device_alert(
+        self,
+        device_mac: Optional[str] = None,
+        details: Optional[str] = None,
+        cooldown_seconds: int = 0,
+    ):
+        message = details or "Blocked device detected while presence is active."
         print("[HIGH ALERT] {0}".format(message))
-        self.event_service.log_event(
+        if cooldown_seconds > 0:
+            return self.event_service.log_event_once(
+                event_type=EVENT_BLOCKED_DEVICE_ALERT,
+                details=message,
+                device_mac=device_mac,
+                cooldown_seconds=cooldown_seconds,
+            )
+        return self.event_service.log_event(
             event_type=EVENT_BLOCKED_DEVICE_ALERT,
             details=message,
             device_mac=device_mac,

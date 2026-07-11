@@ -14,8 +14,10 @@ const EventsContext = createContext<EventsContextValue | null>(null);
 const EVENT_TYPE_MAP: Record<string, EventType> = {
   DEVICE_DISCOVERED_NEW: 'unknown_detected',
   WIFI_PROBE_DEVICE_DISCOVERED_NEW: 'unknown_detected',
+  WIFI_PROBE_NEARBY_ACTIVITY: 'unknown_detected',
   DEVICE_APPROVED: 'device_approved',
   DEVICE_BLOCKED: 'device_blocked',
+  SECURITY_MODE_CHANGED: 'system',
   APPROVED_USER_PRESENT: 'system',
   NO_APPROVED_USER_PRESENT: 'system',
   UNAUTHORIZED_PRESENCE_ALERT: 'unknown_detected',
@@ -25,8 +27,10 @@ const EVENT_TYPE_MAP: Record<string, EventType> = {
 const EVENT_MESSAGE_MAP: Record<string, string> = {
   DEVICE_DISCOVERED_NEW: 'New device on network',
   WIFI_PROBE_DEVICE_DISCOVERED_NEW: 'Strong nearby device detected',
+  WIFI_PROBE_NEARBY_ACTIVITY: 'Strong nearby wireless activity',
   DEVICE_APPROVED: 'Device approved',
   DEVICE_BLOCKED: 'Device blocked',
+  SECURITY_MODE_CHANGED: 'Security mode changed',
   APPROVED_USER_PRESENT: 'Authorized user identified',
   NO_APPROVED_USER_PRESENT: 'No authorized user present',
   UNAUTHORIZED_PRESENCE_ALERT: 'Unauthorized presence alert',

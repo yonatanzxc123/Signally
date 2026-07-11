@@ -14,22 +14,26 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException
-import threading
-import time
-from signally.config import MONITOR_INTERVAL_SECONDS
+from signally.config import (
+    AUTO_START_MONITORING,
+    AUTO_START_WIFI_PROBING,
+    EVENT_SECURITY_MODE_CHANGED,
+    WIFI_PROBING_FALLBACK_TO_MOCK,
+    WIFI_PROBING_INTERFACE,
+    WIFI_PROBING_MOCK_MODE,
+)
 from signally.db.init_db import initialize_database
 from signally.network_scanner.scanner import NetworkScanner
 from signally.wifi_probing.wifi_probing_service import WifiProbingService
-from scapy.all import get_if_list  
 
 
 from signally.api.dependencies import (
+    background_monitor,
     build_services,
     csi_provider,
     get_db_session,
     wifi_probing_state,
 )
-from signally.models.correlation_models import CorrelationContext
 from signally.api.schemas import (
     ApproveDeviceRequest,
     AuthResponse,
@@ -49,51 +53,9 @@ from signally.api.schemas import (
     UserCreateRequest,
     UserResponse,
 )
-from signally.config import EVENT_SECURITY_MODE_CHANGED
 from signally.models.security_mode import SecurityMode
 from signally.models.user import UserRole
 from signally.services.connected_inspection_service import ConnectedInspectionService
-
-
-def run_background_monitor():
-    """ Background thread: Runs ARP, gathers Probes, and evaluates Correlation. """
-    while True:
-        session = None
-        try:
-            session = get_db_session()
-            scanner = NetworkScanner()
-            discovered = scanner.scan()
-            
-            services = build_services(session)
-            services["device_service"].process_scan_results(discovered)
-            
-            # --- CORRELATION EVALUATION ---
-            csi_detected = csi_provider.is_presence_detected()
-            connected_presence = services["presence_service"].get_presence_snapshot()
-            nearby_presence = WifiProbingService(session).get_presence_snapshot()
-            security_state = services["security_mode_service"].get_state()
-
-            context = CorrelationContext(
-                csi_presence_detected=csi_detected,
-                nearby_device_count=nearby_presence.nearby_probe_count,
-                connected_presence=connected_presence,
-                nearby_presence=nearby_presence,
-                security_mode=security_state.mode,
-            )
-            
-            decision = services["correlation_service"].evaluate(context)
-            
-            if decision.decision == "ALERT":
-                services["alert_service"].raise_unauthorized_presence_alert()
-            elif decision.decision == "HIGH_ALERT":
-                services["alert_service"].raise_blocked_device_alert()
-        except Exception as e:
-            print(f"Monitor Loop Error: {e}")
-        finally:
-            if session is not None:
-                session.close()
-        
-        time.sleep(MONITOR_INTERVAL_SECONDS)
 
 
 app = FastAPI(title="Signally API", version="1.0.0")
@@ -151,6 +113,68 @@ def to_connected_inspection_response(result) -> ConnectedInspectionResponse:
     )
 
 
+def _pending_connected_devices(snapshot):
+    return snapshot.connected_presence.pending_connected_devices
+
+
+def to_system_state_response(snapshot) -> SystemStateResponse:
+    mode = snapshot.security_state.mode.value
+    return SystemStateResponse(
+        mode=mode,
+        security_mode=mode,
+        security_mode_updated_by_role=snapshot.security_state.updated_by_role,
+        security_mode_updated_at=snapshot.security_state.updated_at,
+        csi_presence_detected=snapshot.csi_presence_detected,
+        approved_user_present=snapshot.connected_presence.approved_user_present,
+        admin_present=snapshot.connected_presence.admin_present,
+        family_present=snapshot.connected_presence.family_present,
+        guest_present=snapshot.connected_presence.guest_present,
+        decision=snapshot.decision.decision,
+        reason=snapshot.decision.reason,
+        present_devices=[
+            to_device_response(device)
+            for device in snapshot.connected_presence.connected_devices
+        ],
+        current_intruder_count=snapshot.decision.current_intruder_count,
+        known_devices=snapshot.authorized_devices_count,
+        unknown_devices=snapshot.decision.current_intruder_count,
+        nearby_probe_count=snapshot.nearby_presence.nearby_probe_count,
+        current_unknown_devices=[
+            to_device_response(device)
+            for device in _pending_connected_devices(snapshot)
+        ],
+        admin_review_grace_active=snapshot.decision.admin_review_grace_active,
+        notification_audience=snapshot.decision.notification_audience,
+        recent_alerts=[to_event_response(event) for event in snapshot.recent_alerts],
+    )
+
+
+def to_monitoring_cycle_response(snapshot) -> MonitoringCycleResponse:
+    mode = snapshot.security_state.mode.value
+    return MonitoringCycleResponse(
+        mode=mode,
+        security_mode=mode,
+        csi_presence_detected=snapshot.csi_presence_detected,
+        approved_user_present=snapshot.connected_presence.approved_user_present,
+        admin_present=snapshot.connected_presence.admin_present,
+        family_present=snapshot.connected_presence.family_present,
+        guest_present=snapshot.connected_presence.guest_present,
+        decision=snapshot.decision.decision,
+        reason=snapshot.decision.reason,
+        processed_devices_count=snapshot.processed_devices_count,
+        present_devices_count=snapshot.present_devices_count,
+        authorized_devices_count=snapshot.authorized_devices_count,
+        pending_devices_count=snapshot.pending_devices_count,
+        blocked_devices_count=snapshot.blocked_devices_count,
+        current_intruder_count=snapshot.decision.current_intruder_count,
+        nearby_probe_count=snapshot.nearby_presence.nearby_probe_count,
+        admin_review_grace_active=snapshot.decision.admin_review_grace_active,
+        notification_audience=snapshot.decision.notification_audience,
+        scan_error=snapshot.scan_error,
+        recent_alerts=[to_event_response(event) for event in snapshot.recent_alerts],
+    )
+
+
 def parse_actor_role(value: Optional[str]) -> UserRole:
     if not value:
         return UserRole.ADMIN
@@ -160,39 +184,49 @@ def parse_actor_role(value: Optional[str]) -> UserRole:
         raise HTTPException(status_code=400, detail="Unknown user role: {0}".format(value))
 
 
-def select_current_unknown_devices(connected_presence):
-    return connected_presence.pending_connected_devices
-
-
-
 @app.on_event("startup")
 def on_startup() -> None:
     initialize_database()
-    
-    # 1. Start the ARP & Correlation background loop
-    threading.Thread(target=run_background_monitor, daemon=True).start()
-    
-    # 2. Auto-Fallback for Layer 2 (Wi-Fi Probing)
-    # This is the name we expect the Wavlink to have once in monitor mode
-    EXPECTED_WIFI_INTERFACE = "wlan1"
-    
-    try:
-        # VALIDATION STEP: Check if the interface is actually plugged in
-        available_interfaces = get_if_list()
-        
-        if EXPECTED_WIFI_INTERFACE not in available_interfaces:
-            raise ValueError(f"Interface {EXPECTED_WIFI_INTERFACE} is not connected.")
 
-        # ATTEMPT: Try to bind to the physical Wavlink antenna
-        wifi_probing_state.start(interface=EXPECTED_WIFI_INTERFACE, mock_mode=False)
-        print(f"[STARTUP] SUCCESS: Layer 2 Wi-Fi Probing started in REAL mode on {EXPECTED_WIFI_INTERFACE}.")
-        
-    except Exception as hardware_error:
-        # FALLBACK: Adapter missing or driver not loaded? Silently fall back to Mock!
-        print(f"[STARTUP] Hardware bypass ({hardware_error}). Layer 2 falling back to MOCK mode.")
+    if AUTO_START_MONITORING:
+        background_monitor.start()
+
+    if AUTO_START_WIFI_PROBING:
+        _start_wifi_probing_from_config()
+
+
+@app.on_event("shutdown")
+def on_shutdown() -> None:
+    background_monitor.stop()
+    wifi_probing_state.stop()
+    if hasattr(csi_provider, "stop"):
+        csi_provider.stop()
+
+
+def _start_wifi_probing_from_config() -> None:
+    if wifi_probing_state.is_running():
+        return
+
+    if WIFI_PROBING_MOCK_MODE:
         wifi_probing_state.start(interface=None, mock_mode=True)
+        return
 
-        
+    try:
+        from scapy.all import get_if_list
+
+        available_interfaces = get_if_list()
+        if WIFI_PROBING_INTERFACE not in available_interfaces:
+            raise ValueError("Interface {0} is not connected.".format(WIFI_PROBING_INTERFACE))
+        wifi_probing_state.start(interface=WIFI_PROBING_INTERFACE, mock_mode=False)
+    except Exception as hardware_error:
+        if not WIFI_PROBING_FALLBACK_TO_MOCK:
+            raise
+        print(
+            "[STARTUP] Wi-Fi probing hardware unavailable ({0}). Falling back to mock mode.".format(
+                hardware_error
+            )
+        )
+        wifi_probing_state.start(interface=None, mock_mode=True)
 
 @app.get("/health", response_model=MessageResponse)
 def health() -> MessageResponse:
@@ -278,8 +312,7 @@ def get_security_mode():
         session.close()
 
 
-@app.post("/security-mode", response_model=SecurityModeResponse)
-def set_security_mode(
+def _set_security_mode(
     request: SetSecurityModeRequest,
     x_signally_user_role: Optional[str] = Header(default=None),
 ):
@@ -307,6 +340,22 @@ def set_security_mode(
         return to_security_mode_response(state)
     finally:
         session.close()
+
+
+@app.put("/security-mode", response_model=SecurityModeResponse)
+def put_security_mode(
+    request: SetSecurityModeRequest,
+    x_signally_user_role: Optional[str] = Header(default=None),
+):
+    return _set_security_mode(request, x_signally_user_role)
+
+
+@app.post("/security-mode", response_model=SecurityModeResponse)
+def set_security_mode(
+    request: SetSecurityModeRequest,
+    x_signally_user_role: Optional[str] = Header(default=None),
+):
+    return _set_security_mode(request, x_signally_user_role)
 
 
 @app.post("/scan", response_model=list[DeviceResponse])
@@ -650,44 +699,11 @@ def get_system_state():
     session = get_db_session()
     try:
         services = build_services(session)
-        csi_detected = csi_provider.is_presence_detected()
-        connected_presence = services["presence_service"].get_presence_snapshot()
-        nearby_presence = WifiProbingService(session).get_presence_snapshot()
-        security_state = services["security_mode_service"].get_state()
-
-        context = CorrelationContext(
-            csi_presence_detected=csi_detected,
-            nearby_device_count=nearby_presence.nearby_probe_count,
-            connected_presence=connected_presence,
-            nearby_presence=nearby_presence,
-            security_mode=security_state.mode,
+        snapshot = services["system_state_service"].collect_state(
+            run_scan=False,
+            persist_alerts=False,
         )
-
-        decision = services["correlation_service"].evaluate(context)
-
-        return SystemStateResponse(
-            security_mode=security_state.mode.value,
-            security_mode_updated_by_role=security_state.updated_by_role,
-            security_mode_updated_at=security_state.updated_at,
-            csi_presence_detected=csi_detected,
-            approved_user_present=connected_presence.approved_user_present,
-            admin_present=connected_presence.admin_present,
-            family_present=connected_presence.family_present,
-            guest_present=connected_presence.guest_present,
-            decision=decision.decision,
-            reason=decision.reason,
-            present_devices=[
-                to_device_response(d)
-                for d in connected_presence.connected_devices
-            ],
-            current_intruder_count=decision.current_intruder_count,
-            current_unknown_devices=[
-                to_device_response(d)
-                for d in select_current_unknown_devices(connected_presence)
-            ],
-            admin_review_grace_active=decision.admin_review_grace_active,
-            notification_audience=decision.notification_audience,
-        )
+        return to_system_state_response(snapshot)
     finally:
         session.close()
 
@@ -696,42 +712,11 @@ def run_monitoring_cycle():
     """ Frontend requirement: Manually trigger a full cycle """
     session = get_db_session()
     try:
-        scanner = NetworkScanner()
-        discovered = scanner.scan()
         services = build_services(session)
-        services["device_service"].process_scan_results(discovered)
-        
-        csi_detected = csi_provider.is_presence_detected()
-        connected_presence = services["presence_service"].get_presence_snapshot()
-        nearby_presence = WifiProbingService(session).get_presence_snapshot()
-        security_state = services["security_mode_service"].get_state()
-
-        context = CorrelationContext(
-            csi_presence_detected=csi_detected,
-            nearby_device_count=nearby_presence.nearby_probe_count,
-            connected_presence=connected_presence,
-            nearby_presence=nearby_presence,
-            security_mode=security_state.mode,
+        snapshot = services["system_state_service"].collect_state(
+            run_scan=True,
+            persist_alerts=True,
         )
-        decision = services["correlation_service"].evaluate(context)
-        
-        return MonitoringCycleResponse(
-            security_mode=security_state.mode.value,
-            csi_presence_detected=csi_detected,
-            approved_user_present=connected_presence.approved_user_present,
-            admin_present=connected_presence.admin_present,
-            family_present=connected_presence.family_present,
-            guest_present=connected_presence.guest_present,
-            decision=decision.decision,
-            reason=decision.reason,
-            processed_devices_count=len(discovered),
-            present_devices_count=len(connected_presence.connected_devices),
-            authorized_devices_count=len(connected_presence.authorised_connected_devices),
-            pending_devices_count=len(connected_presence.pending_connected_devices),
-            blocked_devices_count=len(connected_presence.blocked_connected_devices),
-            current_intruder_count=decision.current_intruder_count,
-            admin_review_grace_active=decision.admin_review_grace_active,
-            notification_audience=decision.notification_audience,
-        )
+        return to_monitoring_cycle_response(snapshot)
     finally:
         session.close()

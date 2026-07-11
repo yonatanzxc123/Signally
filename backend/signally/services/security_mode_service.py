@@ -46,8 +46,12 @@ class SecurityModeService:
             updated_at=utc_now(),
         )
         self.session.add(state)
-        self.session.commit()
-        self.session.refresh(state)
+        try:
+            self.session.commit()
+            self.session.refresh(state)
+        except Exception:
+            self.session.rollback()
+            raise
         return state
 
     def set_mode(
@@ -60,6 +64,10 @@ class SecurityModeService:
         state.mode = self.normalize_mode(mode)
         state.updated_by_role = normalized_role.value
         state.updated_at = utc_now()
-        self.session.commit()
-        self.session.refresh(state)
+        try:
+            self.session.commit()
+            self.session.refresh(state)
+        except Exception:
+            self.session.rollback()
+            raise
         return state

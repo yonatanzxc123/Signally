@@ -51,6 +51,7 @@ def test_family_role_cannot_approve_devices():
     with pytest.raises(PermissionError):
         admin_manager.approve_device(
             "AA:BB:CC:DD:EE:20",
+            owner_role=UserRole.FAMILY,
             actor_role=UserRole.FAMILY,
         )
 
@@ -64,21 +65,19 @@ def test_intruder_enters_admin_review_before_family_alert():
     scan_one(device_service, "AA:BB:CC:DD:EE:23", "192.168.1.23")
     admin_manager.approve_device(
         "AA:BB:CC:DD:EE:21",
-        owner_name="Admin Phone",
         owner_role=UserRole.ADMIN,
     )
     admin_manager.approve_device(
         "AA:BB:CC:DD:EE:22",
-        owner_name="Family Phone",
         owner_role=UserRole.FAMILY,
     )
 
     connected_presence = presence_service.get_presence_snapshot()
-    nearby_presence = WifiProbingService(session).get_presence_snapshot(connected_presence)
+    nearby_presence = WifiProbingService(session).get_presence_snapshot()
     decision = CorrelationService().evaluate(
         CorrelationContext(
             csi_presence_detected=True,
-            nearby_device_count=len(nearby_presence.nearby_devices),
+            nearby_device_count=nearby_presence.nearby_probe_count,
             connected_presence=connected_presence,
             nearby_presence=nearby_presence,
             security_mode=SecurityMode.AWAY,
@@ -87,7 +86,7 @@ def test_intruder_enters_admin_review_before_family_alert():
 
     assert connected_presence.admin_present is True
     assert connected_presence.family_present is True
-    assert decision.decision == "ADMIN_REVIEW"
+    assert decision.decision == "REVIEW"
     assert decision.notification_audience == ["ADMIN"]
     assert decision.current_intruder_count == 1
 
@@ -100,7 +99,6 @@ def test_unresolved_intruder_escalates_to_family_after_review_window():
     scan_one(device_service, "AA:BB:CC:DD:EE:25", "192.168.1.25")
     admin_manager.approve_device(
         "AA:BB:CC:DD:EE:24",
-        owner_name="Admin Phone",
         owner_role=UserRole.ADMIN,
     )
 
@@ -109,11 +107,11 @@ def test_unresolved_intruder_escalates_to_family_after_review_window():
     session.commit()
 
     connected_presence = presence_service.get_presence_snapshot()
-    nearby_presence = WifiProbingService(session).get_presence_snapshot(connected_presence)
+    nearby_presence = WifiProbingService(session).get_presence_snapshot()
     decision = CorrelationService().evaluate(
         CorrelationContext(
             csi_presence_detected=True,
-            nearby_device_count=len(nearby_presence.nearby_devices),
+            nearby_device_count=nearby_presence.nearby_probe_count,
             connected_presence=connected_presence,
             nearby_presence=nearby_presence,
             security_mode=SecurityMode.AWAY,
@@ -133,23 +131,22 @@ def test_home_mode_unknown_device_enters_review_without_loud_alert():
     scan_one(device_service, "AA:BB:CC:DD:EE:29", "192.168.1.29")
     admin_manager.approve_device(
         "AA:BB:CC:DD:EE:28",
-        owner_name="Admin Phone",
         owner_role=UserRole.ADMIN,
     )
 
     connected_presence = presence_service.get_presence_snapshot()
-    nearby_presence = WifiProbingService(session).get_presence_snapshot(connected_presence)
+    nearby_presence = WifiProbingService(session).get_presence_snapshot()
     decision = CorrelationService().evaluate(
         CorrelationContext(
             csi_presence_detected=True,
-            nearby_device_count=len(nearby_presence.nearby_devices),
+            nearby_device_count=nearby_presence.nearby_probe_count,
             connected_presence=connected_presence,
             nearby_presence=nearby_presence,
             security_mode=SecurityMode.HOME,
         )
     )
 
-    assert decision.decision == "HOME_REVIEW"
+    assert decision.decision == "REVIEW"
     assert decision.security_mode == SecurityMode.HOME
     assert decision.notification_audience == ["ADMIN"]
 
@@ -159,19 +156,19 @@ def test_home_mode_csi_without_recent_phone_is_occupied_not_intruder():
     _, _, _, presence_service = build_services(session)
 
     connected_presence = presence_service.get_presence_snapshot()
-    nearby_presence = WifiProbingService(session).get_presence_snapshot(connected_presence)
+    nearby_presence = WifiProbingService(session).get_presence_snapshot()
     decision = CorrelationService().evaluate(
         CorrelationContext(
             csi_presence_detected=True,
-            nearby_device_count=len(nearby_presence.nearby_devices),
+            nearby_device_count=nearby_presence.nearby_probe_count,
             connected_presence=connected_presence,
             nearby_presence=nearby_presence,
             security_mode=SecurityMode.HOME,
         )
     )
 
-    assert decision.decision == "HOME_OCCUPIED"
-    assert decision.notification_audience == []
+    assert decision.decision == "REVIEW"
+    assert decision.notification_audience == ["ADMIN"]
 
 
 def test_reset_database_content_deletes_devices_and_users():

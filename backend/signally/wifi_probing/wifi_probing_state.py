@@ -98,7 +98,7 @@ class WifiProbingState:
         service = WifiProbingService(session)
 
         try:
-            service.log_started(self._interface, self._mock_mode)
+            self._safe_log(service.log_started, self._interface, self._mock_mode)
             assert self._detector is not None
             self._detector.run(
                 on_detection=service.handle_detection,
@@ -107,7 +107,13 @@ class WifiProbingState:
         except Exception as exc:
             self._last_error = str(exc)
             logger.exception("Wi-Fi probing failed: %s", exc)
-            service.log_error(self._interface, str(exc))
+            self._safe_log(service.log_error, self._interface, str(exc))
         finally:
-            service.log_stopped(self._interface)
+            self._safe_log(service.log_stopped, self._interface)
             session.close()
+
+    def _safe_log(self, func, *args) -> None:
+        try:
+            func(*args)
+        except Exception as exc:
+            logger.warning("Wi-Fi probing state log failed: %s", exc)

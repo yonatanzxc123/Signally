@@ -7,11 +7,19 @@ interface Props {
   hasUnknown: boolean;
   deviceCount: number;
   securityMode?: 'HOME' | 'AWAY';
+  decision?: string;
 }
 
-export default function StatusCard({ hasUnknown, deviceCount, securityMode = 'HOME' }: Props) {
+export default function StatusCard({
+  hasUnknown,
+  deviceCount,
+  securityMode = 'HOME',
+  decision,
+}: Props) {
   const noDevices = deviceCount === 0;
-  const secure = !hasUnknown && !noDevices;
+  const normalizedDecision = decision ?? (hasUnknown ? 'ALERT' : 'SAFE');
+  const secure = normalizedDecision === 'SAFE' && !noDevices;
+  const review = normalizedDecision === 'REVIEW';
 
   const config = noDevices
     ? {
@@ -48,6 +56,21 @@ export default function StatusCard({ hasUnknown, deviceCount, securityMode = 'HO
         statusText: 'RELAXED',
         statusColor: colors.accent,
         sub: 'Trusted household presence is expected',
+      }
+    : review
+    ? {
+        icon: 'help-circle' as const,
+        iconColor: colors.unknown,
+        iconBg: colors.unknownLight,
+        cardBg: colors.unknownLight,
+        labelColor: colors.unknown,
+        label: securityMode === 'AWAY' ? 'AWAY MODE' : 'HOME MODE',
+        statusText: 'REVIEW',
+        statusColor: colors.unknown,
+        sub:
+          securityMode === 'AWAY'
+            ? 'Suspicious activity is in the review window'
+            : 'Unknown activity is queued for review',
       }
     : {
         icon: 'shield' as const,

@@ -4,6 +4,7 @@ User business logic — app authentication users only.
 
 from __future__ import annotations
 
+from uuid import uuid4
 from typing import List, Optional
 
 from sqlalchemy import select
@@ -28,11 +29,17 @@ class UserService:
     def create_user(self, display_name: str, role: UserRole | str) -> User:
         user = User(
             display_name=display_name.strip(),
+            email="local-user-{0}@signally.local".format(uuid4().hex),
+            password_hash="",
             role=self.normalize_role(role),
         )
         self.session.add(user)
-        self.session.commit()
-        self.session.refresh(user)
+        try:
+            self.session.commit()
+            self.session.refresh(user)
+        except Exception:
+            self.session.rollback()
+            raise
         return user
 
     def list_users(self) -> List[User]:
@@ -48,5 +55,9 @@ class UserService:
         count = len(users)
         for user in users:
             self.session.delete(user)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
         return count
