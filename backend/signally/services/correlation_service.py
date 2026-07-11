@@ -191,12 +191,12 @@ class CorrelationService:
 
         if pending_devices:
             first_seen = min(device.first_seen for device in pending_devices)
+            if first_seen.tzinfo is None:
+                first_seen = first_seen.replace(tzinfo=timezone.utc)
         else:
             first_seen = first_probe_seen_at
 
         if first_probe_seen_at is not None and first_probe_seen_at < first_seen:
             first_seen = first_probe_seen_at
 
-        if first_seen.tzinfo is None:
-            first_seen = first_seen.replace(tzinfo=timezone.utc)
         return (utc_now() - first_seen).total_seconds() < ADMIN_REVIEW_GRACE_SECONDS
