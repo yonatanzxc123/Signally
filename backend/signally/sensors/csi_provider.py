@@ -3,14 +3,22 @@ CSI presence provider abstractions.
 """
 
 from typing import Optional
+from collections import deque
 import threading
 import socket
 import struct
 import math
+import statistics
 import logging
 import time
 
-from signally.config import CSI_REAL_PROVIDER_ENABLED
+from signally.config import (
+    CSI_PRESENCE_THRESHOLD,
+    CSI_REAL_PROVIDER_ENABLED,
+    CSI_UDP_IP,
+    CSI_UDP_PORT,
+    CSI_VARIANCE_WINDOW,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,16 +51,50 @@ class FlagCsiDetectionProvider(CsiDetectionProvider):
 
 # --- REAL PROVIDER (For Raspberry Pi Integration) ---
 
+# nexmon_csi UDP frame layout (seemoo-lab/nexmon_csi, BCM43455c0 / BCM4339 chips
+# only - those chips emit plain interleaved int16 I/Q pairs; bcm4358/bcm4366c0
+# use a different compressed float format not handled here):
+#
+#   offset  size  field
+#   0       4     magic bytes, always 0x11111111
+#   4       2     magic bytes, always 0x1111
+#   6       6     source MAC address
+#   12      2     Wi-Fi frame sequence number
+#   14      2     core (low 3 bits) / spatial stream (next 3 bits)
+#   16      2     chanspec
+#   18      2     chip version identifier
+#   20      ...   CSI data: N subcarriers x (int16 real, int16 imag) = N x 4 bytes
+#                 N is 64/128/256 for 20/40/80 MHz, set when nexutil configures capture.
+#
+# Verified against the project's README field table; byte order (assumed
+# little-endian, matching the ARM/Broadcom chip) has NOT been validated against
+# a live capture. If amplitudes come out looking like noise once real hardware
+# is connected, flip _HEADER_STRUCT/_CSI_VALUE_FORMAT to '>' and re-check.
+_CSI_MAGIC = b"\x11\x11\x11\x11"
+_HEADER_STRUCT = struct.Struct("<H6sHHHH")  # magic2, mac, seq, core_spatial, chanspec, chip
+_HEADER_SIZE = 4 + _HEADER_STRUCT.size  # 4-byte magic1 prefix + the rest
+_CSI_VALUE_FORMAT = "<h"  # one int16 (real or imag)
+
+
 class RealCsiDetectionProvider(CsiDetectionProvider):
-    def __init__(self, udp_ip: str = "127.0.0.1", udp_port: int = 5500, threshold: float = 15.0) -> None:
+    def __init__(
+        self,
+        udp_ip: str = CSI_UDP_IP,
+        udp_port: int = CSI_UDP_PORT,
+        threshold: float = CSI_PRESENCE_THRESHOLD,
+        window_size: int = CSI_VARIANCE_WINDOW,
+    ) -> None:
         self._detected = False
         self._strength = 0.0
         self.threshold = threshold
-        
+        self.window_size = window_size
+
         self.udp_ip = udp_ip
         self.udp_port = udp_port
         self._last_packet_time = 0.0   # Track when we last got data
-        
+
+        self._amplitude_history: deque = deque(maxlen=window_size)
+
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._capture_loop, daemon=True)
         self._thread.start()
@@ -92,36 +134,54 @@ class RealCsiDetectionProvider(CsiDetectionProvider):
 
         while not self._stop_event.is_set():
             try:
-                data, _ = sock.recvfrom(4096)
+                data, _ = sock.recvfrom(8192)
                 self._last_packet_time = time.time()
-                
-                # NOTE: Nexmon payloads require specific struct unpacking.
-                # Example: bypassing the MAC header and extracting complex numbers (I & Q)
-                # i_val, q_val = struct.unpack('hh', data[some_offset:some_offset+4])
-                
-                # --- TEMPLATE MATH LOGIC ---
-                # 1. Extract I (In-phase) and Q (Quadrature) from raw memory bytes.
-                # 2. Calculate Amplitude: amplitude = math.sqrt(I**2 + Q**2)
-                # 3. Calculate Variance of the amplitude over the last N packets.
-                
-                # Dummy variance calculation to keep the loop valid until hardware arrives
-                current_variance = 0.0  
-                
+
+                mean_amplitude = self._parse_csi_frame(data)
+                if mean_amplitude is None:
+                    continue  # not a CSI frame (bad magic / too short) - ignore
+
+                self._amplitude_history.append(mean_amplitude)
+
+                # Motion shows up as variance in subcarrier amplitude over time,
+                # not the raw amplitude itself - a stationary room settles to a
+                # near-constant amplitude, a moving body disturbs the multipath.
+                if len(self._amplitude_history) < 2:
+                    continue
+                current_variance = statistics.pvariance(self._amplitude_history)
                 self._strength = current_variance
-                
-                # If the variance spikes above the baseline threshold, someone is moving
-                if current_variance > self.threshold:
-                    self._detected = True
-                else:
-                    self._detected = False
+                self._detected = current_variance > self.threshold
 
             except socket.timeout:
                 # Normal behavior if no packets are being sent
                 continue
             except Exception as e:
                 logger.error("CSI Stream Error: %s", e)
-                
+
         sock.close()
+
+    def _parse_csi_frame(self, data: bytes) -> Optional[float]:
+        """Parse one nexmon_csi UDP frame, return the mean subcarrier amplitude."""
+        if len(data) < _HEADER_SIZE or data[:4] != _CSI_MAGIC:
+            return None
+
+        # Header fields (mac/seq/chanspec/chip) aren't needed for a single-sensor
+        # variance detector, but are unpacked here since they're required to
+        # validate frame length against the declared payload.
+        _magic2, _mac, _seq, _core_spatial, _chanspec, _chip = _HEADER_STRUCT.unpack_from(
+            data, 4
+        )
+
+        csi_bytes = data[_HEADER_SIZE:]
+        subcarrier_count = len(csi_bytes) // 4  # 4 bytes = int16 real + int16 imag
+        if subcarrier_count == 0:
+            return None
+
+        values = struct.unpack_from("<%dh" % (subcarrier_count * 2), csi_bytes)
+        amplitudes = [
+            math.hypot(values[2 * i], values[2 * i + 1]) for i in range(subcarrier_count)
+        ]
+        return sum(amplitudes) / len(amplitudes)
     
     def set_detected(self, value: bool) -> None:
        # Safety method to prevent crashes during manual testing.

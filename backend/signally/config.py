@@ -51,8 +51,17 @@ WIFI_PROBING_INTERFACE = os.getenv("SIGNALLY_WIFI_PROBING_INTERFACE", "wlan1")
 WIFI_PROBING_MOCK_MODE = _env_bool("SIGNALLY_WIFI_PROBING_MOCK_MODE", False)
 WIFI_PROBING_FALLBACK_TO_MOCK = _env_bool("SIGNALLY_WIFI_PROBING_FALLBACK_TO_MOCK", True)
 
-# CSI placeholder. Real CSI is intentionally opt-in for this phase.
-CSI_REAL_PROVIDER_ENABLED = _env_bool("SIGNALLY_CSI_REAL_PROVIDER_ENABLED", False)
+# CSI. Real CSI is intentionally opt-in until nexmon hardware is wired up.
+CSI_REAL_PROVIDER_ENABLED = _env_bool("SIGNALLY_CSI_REAL_PROVIDER_ENABLED", True)
+# Where the nexmon_csi driver forwards its UDP CSI dump (localhost on the Pi
+# doing the capture, unless the capture host and the API host are different).
+CSI_UDP_IP = os.getenv("SIGNALLY_CSI_UDP_IP", "127.0.0.1")
+CSI_UDP_PORT = int(os.getenv("SIGNALLY_CSI_UDP_PORT", "5500"))
+# Rolling window (packet count) used to compute amplitude variance for motion detection.
+CSI_VARIANCE_WINDOW = int(os.getenv("SIGNALLY_CSI_VARIANCE_WINDOW", "50"))
+# Variance threshold above which presence/motion is reported. Needs calibration
+# against a real empty-room baseline once hardware is running.
+CSI_PRESENCE_THRESHOLD = float(os.getenv("SIGNALLY_CSI_PRESENCE_THRESHOLD", "15.0"))
 
 EVENT_DEVICE_DELETED = "DEVICE_DELETED"
 EVENT_GUEST_APPROVAL_EXPIRED = "GUEST_APPROVAL_EXPIRED"
