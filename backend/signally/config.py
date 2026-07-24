@@ -51,8 +51,21 @@ WIFI_PROBING_INTERFACE = os.getenv("SIGNALLY_WIFI_PROBING_INTERFACE", "wlan1")
 WIFI_PROBING_MOCK_MODE = _env_bool("SIGNALLY_WIFI_PROBING_MOCK_MODE", False)
 WIFI_PROBING_FALLBACK_TO_MOCK = _env_bool("SIGNALLY_WIFI_PROBING_FALLBACK_TO_MOCK", True)
 
-# CSI placeholder. Real CSI is intentionally opt-in for this phase.
+# CSI. Real CSI is intentionally opt-in until nexmon hardware is capturing.
 CSI_REAL_PROVIDER_ENABLED = _env_bool("SIGNALLY_CSI_REAL_PROVIDER_ENABLED", False)
+# Where the nexmon_csi driver forwards its UDP CSI dump. Localhost on the Pi that
+# runs the capture (which is also the API host in our topology).
+CSI_UDP_IP = os.getenv("SIGNALLY_CSI_UDP_IP", "127.0.0.1")
+CSI_UDP_PORT = int(os.getenv("SIGNALLY_CSI_UDP_PORT", "5500"))
+# Rolling window (frame count) the temporal variance is computed over.
+CSI_VARIANCE_WINDOW = int(os.getenv("SIGNALLY_CSI_VARIANCE_WINDOW", "50"))
+# Motion is flagged when the variance metric exceeds baseline * factor.
+# Calibrate against a real empty-room baseline once hardware is running.
+CSI_BASELINE_FACTOR = float(os.getenv("SIGNALLY_CSI_BASELINE_FACTOR", "3.0"))
+# Frames to observe (assumed empty room) before any detection is emitted.
+CSI_BASELINE_WARMUP = int(os.getenv("SIGNALLY_CSI_BASELINE_WARMUP", "30"))
+# Outlier threshold (in MADs) for the per-frame Hampel filter.
+CSI_HAMPEL_SIGMA = float(os.getenv("SIGNALLY_CSI_HAMPEL_SIGMA", "3.0"))
 
 EVENT_DEVICE_DELETED = "DEVICE_DELETED"
 EVENT_GUEST_APPROVAL_EXPIRED = "GUEST_APPROVAL_EXPIRED"
