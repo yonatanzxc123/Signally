@@ -1,22 +1,30 @@
 #!/bin/bash
-# Capture N Nexmon CSI frames and report their motion metric.
-# Usage: sudo ./csi_test.sh <label> [nframes]
+# Capture Nexmon CSI for a fixed duration and report its motion metric.
+# Usage: sudo bash ./csi_test.sh <label> [seconds]
 set -euo pipefail
 
 LABEL="${1:-test}"
 SAFE_LABEL="${LABEL//[^a-zA-Z0-9_-]/_}"
-FRAME_COUNT="${2:-300}"
+DURATION="${2:-30}"
 INTERFACE="${SIGNALLY_CSI_INTERFACE:-wlan0}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PCAP="/tmp/csi_${SAFE_LABEL}.pcap"
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo "Run with sudo: sudo $0 <label> [nframes]" >&2
+  echo "Run with sudo: sudo bash $0 <label> [seconds]" >&2
   exit 2
 fi
 
-echo "[csi-test] capturing $FRAME_COUNT CSI frames for '$LABEL' -- hold the scenario NOW..."
+echo "[csi-test] capturing CSI for ${DURATION}s for '$LABEL' -- hold the scenario NOW..."
 rm -f "$PCAP"
-tcpdump -ni "$INTERFACE" -w "$PCAP" -c "$FRAME_COUNT" dst port 5500
+# SIGINT asks tcpdump to flush and close the pcap normally when the window ends.
+timeout --signal=INT "$DURATION" \
+  tcpdump -ni "$INTERFACE" -w "$PCAP" dst port 5500 || true
+
+if [ ! -s "$PCAP" ]; then
+  echo "No CSI frames were captured during the ${DURATION}s window." >&2
+  exit 1
+fi
+
 "$PROJECT_ROOT/.venv/bin/python" \
   "$PROJECT_ROOT/backend/scripts/csi_validate.py" "$PCAP"
