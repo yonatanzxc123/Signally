@@ -53,9 +53,8 @@ WIFI_PROBING_FALLBACK_TO_MOCK = _env_bool("SIGNALLY_WIFI_PROBING_FALLBACK_TO_MOC
 
 # CSI. Real CSI is intentionally opt-in until nexmon hardware is capturing.
 CSI_REAL_PROVIDER_ENABLED = _env_bool("SIGNALLY_CSI_REAL_PROVIDER_ENABLED", False)
-# Where the nexmon_csi driver forwards its UDP CSI dump. Localhost on the Pi that
-# runs the capture (which is also the API host in our topology).
-CSI_UDP_IP = os.getenv("SIGNALLY_CSI_UDP_IP", "127.0.0.1")
+# Listen on every local interface because nexmon broadcasts frames on wlan0.
+CSI_UDP_IP = os.getenv("SIGNALLY_CSI_UDP_IP", "0.0.0.0")
 CSI_UDP_PORT = int(os.getenv("SIGNALLY_CSI_UDP_PORT", "5500"))
 # Rolling window (frame count) the temporal variance is computed over.
 CSI_VARIANCE_WINDOW = int(os.getenv("SIGNALLY_CSI_VARIANCE_WINDOW", "50"))

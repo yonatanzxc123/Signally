@@ -46,8 +46,16 @@ def test_too_short_returns_none():
     assert parse_csi_frame(b"short") is None
 
 
+def test_current_nexmon_pi_20mhz_frame_is_274_bytes():
+    frame = build_csi_frame([(1, -1)] * 64)
+
+    assert len(frame) == 274
+    assert frame[:2] == b"\x11\x11"
+    assert parse_csi_frame(frame).subcarrier_count == 64
+
+
 def test_empty_payload_returns_none():
-    # Valid 20-byte header but zero CSI values.
+    # Valid 18-byte header but zero CSI values.
     header_only = build_csi_frame([])
     assert parse_csi_frame(header_only) is None
 

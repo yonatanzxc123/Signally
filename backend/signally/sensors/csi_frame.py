@@ -11,14 +11,14 @@ different compressed-float encoding that this parser deliberately does NOT handl
 target):
 
     offset  size  field
-    0       4     magic bytes, always 0x11111111
-    4       2     magic bytes, always 0x1111
-    6       6     source MAC address
-    12      2     Wi-Fi frame sequence number
-    14      2     core (low 3 bits) / spatial stream (next 3 bits)
-    16      2     chanspec
-    18      2     chip version identifier
-    20      ...   CSI payload: N subcarriers x (int16 real, int16 imag) = N*4 bytes
+    0       2     magic bytes, always 0x1111
+    2       6     source MAC address
+    8       2     Wi-Fi frame sequence number
+    10      2     core (low 3 bits) / spatial stream (next 3 bits)
+    12      2     chanspec
+    14      2     chip version identifier
+    16      2     frame control (currently ignored)
+    18      ...   CSI payload: N subcarriers x (int16 real, int16 imag) = N*4 bytes
                   N is 64 / 128 / 256 for 20 / 40 / 80 MHz capture bandwidth.
 
 Byte order is assumed little-endian (ARM/Broadcom). This is the single assumption
@@ -36,12 +36,11 @@ import numpy as np
 
 _BYTE_ORDER = "<"  # little-endian; see module docstring before changing
 
-_MAGIC = b"\x11\x11\x11\x11"
-# after the 4-byte magic prefix: magic2(H) mac(6s) seq(H) core_spatial(H) chanspec(H) chip(H)
+_MAGIC = 0x1111
 import struct
 
-_HEADER_STRUCT = struct.Struct(_BYTE_ORDER + "H6sHHHH")
-_HEADER_SIZE = len(_MAGIC) + _HEADER_STRUCT.size  # 4 + 16 = 20
+_HEADER_STRUCT = struct.Struct(_BYTE_ORDER + "H6sHHHHH")
+_HEADER_SIZE = _HEADER_STRUCT.size  # 18 bytes in the current nexmon_csi format
 _BYTES_PER_SUBCARRIER = 4  # int16 real + int16 imag
 
 
@@ -69,12 +68,14 @@ def parse_csi_frame(data: bytes) -> Optional[CsiFrame]:
     Returns a CsiFrame, or None if the datagram is not a well-formed CSI frame
     (bad magic, too short, or empty payload) - callers should just skip None.
     """
-    if len(data) < _HEADER_SIZE or data[:4] != _MAGIC:
+    if len(data) < _HEADER_SIZE:
         return None
 
-    _magic2, mac, seq, core_spatial, chanspec, chip = _HEADER_STRUCT.unpack_from(
-        data, len(_MAGIC)
+    magic, mac, seq, core_spatial, chanspec, chip, _frame_control = (
+        _HEADER_STRUCT.unpack_from(data)
     )
+    if magic != _MAGIC:
+        return None
 
     payload = data[_HEADER_SIZE:]
     subcarrier_count = len(payload) // _BYTES_PER_SUBCARRIER
@@ -109,8 +110,8 @@ def build_csi_frame(amplitudes_iq, *, source_mac=b"\xaa\xbb\xcc\xdd\xee\xff",
     Test/replay helper only - the inverse of parse_csi_frame - so unit tests and
     the replay script can produce byte-accurate frames without real hardware.
     """
-    header = _MAGIC + _HEADER_STRUCT.pack(
-        0x1111, source_mac, sequence, core_spatial, chanspec, chip
+    header = _HEADER_STRUCT.pack(
+        _MAGIC, source_mac, sequence, core_spatial, chanspec, chip, 0
     )
     body = b"".join(
         struct.pack(_BYTE_ORDER + "hh", int(r), int(i)) for r, i in amplitudes_iq

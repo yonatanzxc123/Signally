@@ -1,0 +1,12 @@
+[Unit]
+Description=Arm Signally Nexmon CSI capture
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/idanyo/Signally/backend/scripts/csi_capture.sh 8 20
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
