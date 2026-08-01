@@ -26,5 +26,12 @@ if [ ! -s "$PCAP" ]; then
   exit 1
 fi
 
+PACKET_COUNT="$(tcpdump -nn -r "$PCAP" 2>/dev/null | wc -l)"
+if [ "$PACKET_COUNT" -lt 50 ]; then
+  echo "Only $PACKET_COUNT CSI frames were captured; at least 50 are required." >&2
+  echo "Keep sustained upload traffic running for the entire capture window." >&2
+  exit 1
+fi
+
 "$PROJECT_ROOT/.venv/bin/python" \
   "$PROJECT_ROOT/backend/scripts/csi_validate.py" "$PCAP"
