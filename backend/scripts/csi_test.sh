@@ -4,10 +4,11 @@
 set -euo pipefail
 
 LABEL="${1:-test}"
+SAFE_LABEL="${LABEL//[^a-zA-Z0-9_-]/_}"
 FRAME_COUNT="${2:-300}"
 INTERFACE="${SIGNALLY_CSI_INTERFACE:-wlan0}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-PCAP="/tmp/csi_${LABEL}.pcap"
+PCAP="/tmp/csi_${SAFE_LABEL}.pcap"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run with sudo: sudo $0 <label> [nframes]" >&2
@@ -15,6 +16,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 echo "[csi-test] capturing $FRAME_COUNT CSI frames for '$LABEL' -- hold the scenario NOW..."
-tcpdump -ni "$INTERFACE" -w "$PCAP" -c "$FRAME_COUNT" dst port 5500 2>/dev/null
+rm -f "$PCAP"
+tcpdump -ni "$INTERFACE" -w "$PCAP" -c "$FRAME_COUNT" dst port 5500
 "$PROJECT_ROOT/.venv/bin/python" \
   "$PROJECT_ROOT/backend/scripts/csi_validate.py" "$PCAP"
