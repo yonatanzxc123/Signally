@@ -5,7 +5,8 @@ Wants=NetworkManager.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash /home/idanyo/Signally/backend/scripts/csi_capture.sh 48 80
+EnvironmentFile=-/etc/default/signally-csi
+ExecStart=/bin/bash /home/idanyo/Signally/backend/scripts/csi_capture.sh
 RemainAfterExit=yes
 
 [Install]
