@@ -21,7 +21,7 @@ nexutil -I"$INTERFACE" -m
 
 echo "=== Capturing for up to ${DURATION}s / ${MAX_FRAMES} frames ==="
 rm -f "$PCAP"
-timeout "$DURATION" tcpdump -ni "$INTERFACE" -w "$PCAP" \
+timeout --signal=INT "$DURATION" tcpdump -ni "$INTERFACE" -w "$PCAP" \
   -c "$MAX_FRAMES" dst port 5500 2>&1 || true
 
 packet_count="$(tcpdump -nn -r "$PCAP" 2>/dev/null | wc -l)"
@@ -39,4 +39,11 @@ tcpdump -nn -r "$PCAP" 2>/dev/null | head -5
 echo "=== Decode ==="
 "$PROJECT_ROOT/.venv/bin/python" \
   "$PROJECT_ROOT/backend/scripts/csi_validate.py" "$PCAP"
+
+if [ "$packet_count" -lt "$MAX_FRAMES" ]; then
+  echo "FAIL: captured only ${packet_count}/${MAX_FRAMES} requested CSI frames in ${DURATION}s."
+  echo "The decoded frames are real, but the CSI source is not sustained enough."
+  exit 1
+fi
+
 echo "PASS: real CSI frames were captured and decoded."
