@@ -5,7 +5,7 @@ Wants=NetworkManager.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash /home/idanyo/Signally/backend/scripts/csi_capture.sh 8 20
+ExecStart=/bin/bash /home/idanyo/Signally/backend/scripts/csi_capture.sh 48 80
 RemainAfterExit=yes
 
 [Install]
