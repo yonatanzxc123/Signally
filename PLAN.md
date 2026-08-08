@@ -66,6 +66,8 @@ Completed in the current integration pass:
   `REVIEW` or `ALERT`; physical/activity evidence intentionally has no device
   record. Remove the misleading rolling probe-MAC count from the main status UI.
 - [x] CSI capture script unblocks RF-kill and the service path is configurable.
+- [x] Add `backend/docs/csi_backend_test_commands.md` as the consolidated Pi,
+  backend, frontend, CSI, probe, and laptop-ARP test command sheet.
 - [x] Automated provider, ingestion, and probe/correlation regression tests.
 
 Still open after this pass:
