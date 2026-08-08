@@ -88,7 +88,9 @@ export default function HomeScreen() {
   const { data: systemState } = useQuery({
     queryKey: ['system-state'],
     queryFn: api.getSystemState,
-    refetchInterval: 5_000,
+    // CSI is processed continuously on the Pi; refresh its correlated UI state
+    // quickly without tying this cadence to the slower ARP scan interval.
+    refetchInterval: 1_000,
     refetchIntervalInBackground: true,
     retry: false,
   });

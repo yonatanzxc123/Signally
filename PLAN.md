@@ -60,6 +60,8 @@ Completed in the current integration pass:
 - [x] Additive CSI/probe/ARP health fields in system and monitoring API responses.
 - [x] Real-CSI manual override protection.
 - [x] Frontend CSI/probe/ARP health display and `EXPO_PUBLIC_API_URL` support.
+- [x] Refresh the frontend's correlated system/CSI state every second; CSI packet
+  processing remains continuous and independent of the slower ARP scan cadence.
 - [x] CSI capture script unblocks RF-kill and the service path is configurable.
 - [x] Automated provider, ingestion, and probe/correlation regression tests.
 
