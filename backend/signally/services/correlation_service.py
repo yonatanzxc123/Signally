@@ -102,16 +102,17 @@ class CorrelationService:
                 notification_audience=["ADMIN", "FAMILY"],
             )
 
-        # 5. AWAY ALERT: probe-only wireless activity with no approved user home
-        if away_mode and nearby_probe_activity:
+        # 5. AWAY ALERT: physical tripwire motion always alerts while armed.
+        # Approved ARP presence relaxes CSI only in HOME mode.
+        if away_mode and csi_detected:
             return CorrelationDecision(
                 decision="ALERT",
                 severity="MEDIUM",
-                reason="Unknown wireless activity detected nearby.",
+                reason="Physical presence detected while Away mode is armed.",
                 security_mode=security_mode,
-                csi_presence_detected=csi_detected,
+                csi_presence_detected=True,
                 nearby_device_count=context.nearby_device_count,
-                approved_user_present=False,
+                approved_user_present=approved_present,
                 admin_present=admin_present,
                 family_present=family_present,
                 guest_present=guest_present,
@@ -119,7 +120,24 @@ class CorrelationService:
                 notification_audience=["ADMIN", "FAMILY"],
             )
 
-        # 6. HOME: CSI presence alone — occupancy evidence, not intruder verdict
+        # 6. AWAY ALERT: probe-only wireless activity.
+        if away_mode and nearby_probe_activity:
+            return CorrelationDecision(
+                decision="ALERT",
+                severity="MEDIUM",
+                reason="Unknown wireless activity detected nearby.",
+                security_mode=security_mode,
+                csi_presence_detected=False,
+                nearby_device_count=context.nearby_device_count,
+                approved_user_present=approved_present,
+                admin_present=admin_present,
+                family_present=family_present,
+                guest_present=guest_present,
+                current_intruder_count=0,
+                notification_audience=["ADMIN", "FAMILY"],
+            )
+
+        # 7. HOME: CSI presence alone — occupancy evidence, not intruder verdict
         if csi_detected and not approved_present and not away_mode:
             return CorrelationDecision(
                 decision="REVIEW",
@@ -135,25 +153,8 @@ class CorrelationService:
                 notification_audience=["ADMIN"],
             )
 
-        # 7. AWAY ALERT: CSI motion, no authorized phone home
-        if csi_detected and not approved_present:
-            return CorrelationDecision(
-                decision="ALERT",
-                severity="MEDIUM",
-                reason="Physical presence detected while armed and no authorized devices are home.",
-                security_mode=security_mode,
-                csi_presence_detected=csi_detected,
-                nearby_device_count=context.nearby_device_count,
-                approved_user_present=False,
-                admin_present=admin_present,
-                family_present=family_present,
-                guest_present=guest_present,
-                current_intruder_count=1,
-                notification_audience=["ADMIN", "FAMILY"],
-            )
-
-        # 8. SAFE: CSI motion + authorized user home
-        if csi_detected and approved_present:
+        # 8. HOME SAFE: CSI motion + authorized user home
+        if csi_detected and approved_present and not away_mode:
             return CorrelationDecision(
                 decision="SAFE",
                 severity="LOW",

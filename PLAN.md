@@ -62,6 +62,9 @@ Completed in the current integration pass:
 - [x] Frontend CSI/probe/ARP health display and `EXPO_PUBLIC_API_URL` support.
 - [x] Refresh the frontend's correlated system/CSI state every second; CSI packet
   processing remains continuous and independent of the slower ARP scan cadence.
+- [x] Ensure the empty-device frontend placeholder cannot hide a CSI/probe
+  `REVIEW` or `ALERT`; physical/activity evidence intentionally has no device
+  record. Remove the misleading rolling probe-MAC count from the main status UI.
 - [x] CSI capture script unblocks RF-kill and the service path is configurable.
 - [x] Automated provider, ingestion, and probe/correlation regression tests.
 
@@ -385,9 +388,9 @@ a recent-transition window, consumable authorization, or special
 `AWAY -> HOME` entry event or CSI-to-ARP grace period. In `HOME`, retain the
 existing relaxed behavior: CSI-only activity is a low-severity review, approved
 presence is safe, unknown connected activity is reviewed, and blocked devices
-remain critical. In `AWAY`, CSI without approved presence alerts immediately;
-ARP and probe evidence continue through their ordinary correlation rules rather
-than cancelling or delaying CSI.
+remain critical. In `AWAY`, CSI alerts immediately even if an approved device is
+present; ARP and probe evidence continue through their ordinary correlation
+rules rather than cancelling or delaying CSI.
 
 #### CSI warm-up and health
 
@@ -648,11 +651,11 @@ Decision order:
    - CSI can raise severity/confidence but not device count.
 3. Nearby probe activity:
    - HOME: review under existing grace rules.
-   - AWAY without an approved user: alert.
+   - AWAY: alert regardless of approved-device presence.
    - CSI strengthens the evidence.
 4. CSI motion only:
    - HOME without approved user: `REVIEW / LOW`.
-   - AWAY without approved user: `ALERT / MEDIUM`.
+   - AWAY: `ALERT / MEDIUM` regardless of approved-device presence.
    - Approved user present: `SAFE`, with physical activity recorded.
 5. CSI warming up, stale, or unavailable:
    - Continue using connected-device and probe evidence.
@@ -784,7 +787,7 @@ Tasks:
 | HOME | No | No | No | Yes | REVIEW/LOW |
 | HOME | Yes | No | No | Yes | SAFE |
 | AWAY | No | No | No | Yes | ALERT/MEDIUM |
-| AWAY | Yes | No | No | Yes | SAFE |
+| AWAY | Yes | No | No | Yes | ALERT/MEDIUM |
 | AWAY | No | Yes | No | No | ALERT |
 | AWAY | No | Yes | No | Yes | Higher-confidence ALERT |
 | Any | Any | Blocked | Any | Any | ALERT/CRITICAL |

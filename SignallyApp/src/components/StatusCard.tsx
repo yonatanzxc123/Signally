@@ -16,8 +16,10 @@ export default function StatusCard({
   securityMode = 'HOME',
   decision,
 }: Props) {
-  const noDevices = deviceCount === 0;
   const normalizedDecision = decision ?? (hasUnknown ? 'ALERT' : 'SAFE');
+  // CSI/probe evidence can produce a real decision without creating a device
+  // record. Never let the empty-device placeholder hide REVIEW or ALERT.
+  const noDevices = deviceCount === 0 && normalizedDecision === 'SAFE';
   const secure = normalizedDecision === 'SAFE' && !noDevices;
   const review = normalizedDecision === 'REVIEW';
 

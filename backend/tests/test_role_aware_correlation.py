@@ -171,6 +171,31 @@ def test_home_mode_csi_without_recent_phone_is_occupied_not_intruder():
     assert decision.notification_audience == ["ADMIN"]
 
 
+def test_away_mode_csi_alerts_even_when_approved_device_is_present():
+    session = build_session()
+    device_service, _, admin_manager, presence_service = build_services(session)
+    scan_one(device_service, "AA:BB:CC:DD:EE:30", "192.168.1.30")
+    admin_manager.approve_device(
+        "AA:BB:CC:DD:EE:30",
+        owner_role=UserRole.FAMILY,
+    )
+
+    decision = CorrelationService().evaluate(
+        CorrelationContext(
+            csi_presence_detected=True,
+            nearby_device_count=0,
+            connected_presence=presence_service.get_presence_snapshot(),
+            nearby_presence=WifiProbingService(session).get_presence_snapshot(),
+            security_mode=SecurityMode.AWAY,
+        )
+    )
+
+    assert decision.decision == "ALERT"
+    assert decision.approved_user_present is True
+    assert decision.current_intruder_count == 0
+    assert decision.notification_audience == ["ADMIN", "FAMILY"]
+
+
 def test_probe_activity_is_evidence_not_an_intruder_count():
     session = build_session()
     _, _, _, presence_service = build_services(session)

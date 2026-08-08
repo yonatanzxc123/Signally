@@ -303,7 +303,7 @@ export default function HomeScreen() {
               {systemState?.reason ?? 'Waiting for backend state.'}
             </Text>
             <Text style={styles.decisionMeta}>
-              Unknown {systemState?.unknown_devices ?? 0} - Nearby probes {systemState?.nearby_probe_count ?? 0} - Alerts {systemState?.recent_alerts?.length ?? 0}
+              Unknown {systemState?.unknown_devices ?? 0} - Alerts {systemState?.recent_alerts?.length ?? 0}
             </Text>
             <Text style={styles.decisionMeta}>
               CSI {systemState?.csi?.ready

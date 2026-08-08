@@ -1,10 +1,9 @@
 import { Platform } from 'react-native';
 // 10.0.2.2 = Android emulator host alias; real devices need the server's LAN IP.
 const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Platform.OS === 'web'
+Platform.OS === 'web'
     ? 'http://127.0.0.1:8000'
-    : 'http://10.100.102.15:8000');
+    : 'http://10.100.102.15:8000';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
