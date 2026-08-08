@@ -39,6 +39,10 @@ Completed in the current integration pass:
   timestamp, and last error.
 - [x] Configurable CSI stale, warm-up, and detection-hold timing.
 - [x] Provider-side validation of 64/128/256-subcarrier hardware frames.
+- [x] Correct CSI baseline warm-up to use the median of multiple fully populated
+  rolling-window metrics. Live Pi testing showed that calibrating from a partial
+  window produced a threshold below the quiet-room floor and latched detection
+  permanently true.
 - [x] Malformed/geometry-changing frames no longer terminate the CSI thread.
 - [x] Silent real-to-mock fallback removed; mock remains explicit when real CSI
   is disabled.

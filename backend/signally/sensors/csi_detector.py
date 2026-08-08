@@ -76,8 +76,9 @@ class CsiMotionDetector:
         baseline_factor how far above baseline the metric must rise to count as
                         motion (detected = metric > baseline * factor).
         hampel_sigma    outlier threshold in MADs for the Hampel filter.
-        baseline_warmup frames to observe before the baseline is trusted / any
-                        detection is emitted (assumes an empty room at startup).
+        baseline_warmup full-window metrics to observe before the baseline is
+                        trusted / any detection is emitted (assumes an empty
+                        room at startup).
         baseline_alpha  EMA rate for adapting the baseline. Only updated while
                         NOT detecting, so a person standing still never trains
                         itself into the baseline.
@@ -85,15 +86,17 @@ class CsiMotionDetector:
         self.window_size = window_size
         self.baseline_factor = baseline_factor
         self.hampel_sigma = hampel_sigma
-        self.baseline_warmup = baseline_warmup
+        self.baseline_warmup = max(1, baseline_warmup)
         self.baseline_alpha = baseline_alpha
 
         self._window: deque = deque(maxlen=window_size)
+        self._warmup_metrics: deque = deque(maxlen=self.baseline_warmup)
         self._baseline: Optional[float] = None
         self._frames_seen = 0
 
     def reset(self) -> None:
         self._window.clear()
+        self._warmup_metrics.clear()
         self._baseline = None
         self._frames_seen = 0
 
@@ -113,7 +116,7 @@ class CsiMotionDetector:
 
     @property
     def ready(self) -> bool:
-        return self._baseline is not None and self._frames_seen > self.baseline_warmup
+        return self._baseline is not None
 
     def update(self, amplitudes: np.ndarray) -> PresenceReading:
         """Feed one frame's per-subcarrier amplitudes, get a presence reading."""
@@ -127,23 +130,23 @@ class CsiMotionDetector:
             cleaned = cleaned / norm
         self._window.append(cleaned)
 
-        # Need a full-ish window before variance is meaningful.
-        if len(self._window) < 2:
+        # A partial rolling window systematically starts near zero and produced
+        # a permanently low baseline in live tests. Do not calibrate until the
+        # configured temporal window is completely populated.
+        if len(self._window) < self.window_size:
             return PresenceReading(False, 0.0, 0.0, self._baseline)
 
         # Temporal variance per subcarrier, averaged across subcarriers.
         stacked = np.vstack(self._window)
         metric = float(np.mean(np.var(stacked, axis=0)))
 
-        # Warm-up: seed the baseline from the empty room, emit nothing yet.
-        if self._frames_seen <= self.baseline_warmup or self._baseline is None:
-            if self._baseline is None:
-                self._baseline = metric
-            else:
-                self._baseline = (
-                    (1 - self.baseline_alpha) * self._baseline
-                    + self.baseline_alpha * metric
-                )
+        # Warm-up: use the median of several full-window quiet metrics. Seeding
+        # an EMA from the first partial-window metric can trap detection high
+        # forever because the baseline is intentionally frozen during motion.
+        if self._baseline is None:
+            self._warmup_metrics.append(metric)
+            if len(self._warmup_metrics) >= self.baseline_warmup:
+                self._baseline = float(np.median(np.asarray(self._warmup_metrics)))
             return PresenceReading(False, 0.0, metric, self._baseline)
 
         threshold = self._baseline * self.baseline_factor

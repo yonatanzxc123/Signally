@@ -19,6 +19,7 @@ def test_real_provider_reports_health_and_survives_invalid_width():
     provider = RealCsiDetectionProvider(
         udp_ip="127.0.0.1",
         udp_port=port,
+        window_size=2,
         baseline_warmup=1,
         warmup_seconds=0,
         stale_after_seconds=1,

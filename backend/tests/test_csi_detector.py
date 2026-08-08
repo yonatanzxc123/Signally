@@ -21,6 +21,22 @@ def test_hampel_leaves_constant_array_untouched():
     assert np.allclose(hampel_filter(values), values)
 
 
+def test_baseline_waits_for_multiple_full_window_metrics():
+    rng = np.random.default_rng(3)
+    det = CsiMotionDetector(window_size=5, baseline_factor=1.3, baseline_warmup=3)
+    base = np.full(64, 50.0)
+
+    for _ in range(6):
+        reading = det.update(base + rng.normal(0, 0.5, base.size))
+        assert reading.baseline is None
+        assert det.ready is False
+
+    reading = det.update(base + rng.normal(0, 0.5, base.size))
+    assert reading.baseline is not None
+    assert det.ready is True
+    assert reading.detected is False
+
+
 def _feed(detector, base, noise, count, rng):
     reading = None
     for _ in range(count):
