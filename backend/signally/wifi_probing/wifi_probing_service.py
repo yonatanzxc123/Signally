@@ -33,7 +33,7 @@ class WifiProbingService:
         self.event_service = EventService(session)
 
     def handle_detection(self, detection: WifiProbeDetection) -> None:
-        if not self._has_strong_signal(detection):
+        if detection.frame_type != "probe_req" or not self._has_strong_signal(detection):
             return
         self.event_service.log_event(
             event_type=EVENT_WIFI_PROBE_NEARBY_ACTIVITY,
@@ -61,6 +61,8 @@ class WifiProbingService:
 
         return NearbyPresenceSnapshot(
             nearby_probe_count=len(seen_macs),
+            probe_activity_detected=len(events) > 0,
+            probe_observation_count=len(events),
             first_probe_seen_at=first_probe_seen_at,
             window_seconds=window_seconds,
         )

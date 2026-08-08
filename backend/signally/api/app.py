@@ -11,12 +11,15 @@ Current backend focus:
 
 from __future__ import annotations
 
+from datetime import timezone
 from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException
 from signally.config import (
     AUTO_START_MONITORING,
     AUTO_START_WIFI_PROBING,
+    ARP_INGEST_MAX_AGE_SECONDS,
+    ARP_INGEST_TOKEN,
     EVENT_SECURITY_MODE_CHANGED,
     WIFI_PROBING_FALLBACK_TO_MOCK,
     WIFI_PROBING_INTERFACE,
@@ -24,6 +27,9 @@ from signally.config import (
 )
 from signally.db.init_db import initialize_database
 from signally.network_scanner.scanner import NetworkScanner
+from signally.network_scanner.dto import DiscoveredDevice
+from signally.network_scanner.arp_scan_tracker import arp_scan_tracker
+from signally.utils.time_utils import utc_now
 from signally.wifi_probing.wifi_probing_service import WifiProbingService
 
 
@@ -36,8 +42,12 @@ from signally.api.dependencies import (
 )
 from signally.api.schemas import (
     ApproveDeviceRequest,
+    ArpIngestionRequest,
+    ArpIngestionResponse,
+    ArpIngestionStatusResponse,
     AuthResponse,
     ConnectedInspectionResponse,
+    CsiPresenceResponse,
     DeviceResponse,
     EventResponse,
     LoginRequest,
@@ -61,6 +71,10 @@ from signally.services.connected_inspection_service import ConnectedInspectionSe
 app = FastAPI(title="Signally API", version="1.0.0")
 
 
+def _normalized_utc(value):
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
 def to_device_response(device) -> DeviceResponse:
     return DeviceResponse(
         mac_address=device.mac_address,
@@ -69,6 +83,30 @@ def to_device_response(device) -> DeviceResponse:
         first_seen=device.first_seen,
         last_seen=device.last_seen,
         owner_role=device.owner_role,
+    )
+
+
+def to_csi_response(state) -> CsiPresenceResponse:
+    return CsiPresenceResponse(
+        presence_detected=state.recently_detected,
+        presence_strength=state.motion_metric,
+        detected=state.recently_detected,
+        strength=state.motion_metric,
+        **state.__dict__,
+    )
+
+
+def to_arp_status_response() -> ArpIngestionStatusResponse:
+    status = arp_scan_tracker.status()
+    healthy = False
+    if status.last_received_at is not None:
+        healthy = (utc_now() - _normalized_utc(status.last_received_at)).total_seconds() <= ARP_INGEST_MAX_AGE_SECONDS
+    return ArpIngestionStatusResponse(
+        healthy=healthy,
+        last_scan_id=status.last_scan_id,
+        last_captured_at=status.last_captured_at,
+        last_received_at=status.last_received_at,
+        last_device_count=status.last_device_count,
     )
 
 
@@ -119,12 +157,18 @@ def _pending_connected_devices(snapshot):
 
 def to_system_state_response(snapshot) -> SystemStateResponse:
     mode = snapshot.security_state.mode.value
+    arp_status = to_arp_status_response()
     return SystemStateResponse(
         mode=mode,
         security_mode=mode,
         security_mode_updated_by_role=snapshot.security_state.updated_by_role,
         security_mode_updated_at=snapshot.security_state.updated_at,
         csi_presence_detected=snapshot.csi_presence_detected,
+        csi=to_csi_response(snapshot.csi_state),
+        probe_activity_detected=snapshot.nearby_presence.probe_activity_detected,
+        probe_observation_count=snapshot.nearby_presence.probe_observation_count,
+        arp_scanner_healthy=arp_status.healthy,
+        arp_last_received_at=arp_status.last_received_at,
         approved_user_present=snapshot.connected_presence.approved_user_present,
         admin_present=snapshot.connected_presence.admin_present,
         family_present=snapshot.connected_presence.family_present,
@@ -151,10 +195,16 @@ def to_system_state_response(snapshot) -> SystemStateResponse:
 
 def to_monitoring_cycle_response(snapshot) -> MonitoringCycleResponse:
     mode = snapshot.security_state.mode.value
+    arp_status = to_arp_status_response()
     return MonitoringCycleResponse(
         mode=mode,
         security_mode=mode,
         csi_presence_detected=snapshot.csi_presence_detected,
+        csi=to_csi_response(snapshot.csi_state),
+        probe_activity_detected=snapshot.nearby_presence.probe_activity_detected,
+        probe_observation_count=snapshot.nearby_presence.probe_observation_count,
+        arp_scanner_healthy=arp_status.healthy,
+        arp_last_received_at=arp_status.last_received_at,
         approved_user_present=snapshot.connected_presence.approved_user_present,
         admin_present=snapshot.connected_presence.admin_present,
         family_present=snapshot.connected_presence.family_present,
@@ -374,6 +424,59 @@ def scan_network():
         ]
     finally:
         session.close()
+
+
+@app.post("/arp/ingest", response_model=ArpIngestionResponse)
+def ingest_arp_scan(
+    request: ArpIngestionRequest,
+    x_signally_ingest_token: Optional[str] = Header(default=None),
+):
+    if not ARP_INGEST_TOKEN:
+        raise HTTPException(status_code=503, detail="ARP ingestion token is not configured")
+    if x_signally_ingest_token != ARP_INGEST_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid ARP ingestion token")
+
+    received_at = utc_now()
+    captured_at = _normalized_utc(request.captured_at)
+    age = (received_at - captured_at).total_seconds()
+    if age < -5 or age > ARP_INGEST_MAX_AGE_SECONDS:
+        raise HTTPException(status_code=422, detail="ARP scan is stale or has an invalid timestamp")
+
+    if not arp_scan_tracker.reserve(request.scan_id):
+        raise HTTPException(status_code=409, detail="ARP scan ID was already processed")
+
+    discovered = [
+        DiscoveredDevice(
+            ip_address=item.ip_address.strip(),
+            mac_address=item.mac_address.strip().upper(),
+        )
+        for item in request.devices
+    ]
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        processed = services["device_service"].process_scan_results(discovered)
+        arp_scan_tracker.complete(
+            request.scan_id,
+            captured_at,
+            received_at,
+            len(request.devices),
+        )
+        return ArpIngestionResponse(
+            accepted=True,
+            processed_devices_count=len(processed),
+            received_at=received_at,
+        )
+    except Exception:
+        arp_scan_tracker.release(request.scan_id)
+        raise
+    finally:
+        session.close()
+
+
+@app.get("/arp/status", response_model=ArpIngestionStatusResponse)
+def get_arp_ingestion_status():
+    return to_arp_status_response()
 
 
 @app.get("/devices", response_model=list[DeviceResponse])
@@ -681,16 +784,15 @@ def add_mock_wifi_probe_detection(
 
 @app.post("/csi/set", response_model=MessageResponse)
 def set_csi_presence(request: SetCsiPresenceRequest):
+    if csi_provider.get_state().provider_mode == "real":
+        raise HTTPException(status_code=409, detail="Manual CSI override is unavailable while real CSI is enabled")
     csi_provider.set_detected(request.detected)
     return MessageResponse(message="CSI presence set to {0}.".format(request.detected))
 
 
-@app.get("/csi/status")
+@app.get("/csi/status", response_model=CsiPresenceResponse)
 def get_csi_status():
-    return {
-        "presence_detected": csi_provider.is_presence_detected(),
-        "presence_strength": csi_provider.get_presence_strength(),
-    }
+    return to_csi_response(csi_provider.get_state())
 
 
 @app.get("/system/state", response_model=SystemStateResponse)

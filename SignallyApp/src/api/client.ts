@@ -1,9 +1,10 @@
 import { Platform } from 'react-native';
 // 10.0.2.2 = Android emulator host alias; real devices need the server's LAN IP.
 const BASE_URL =
-  Platform.OS === 'web'
+  process.env.EXPO_PUBLIC_API_URL ??
+  (Platform.OS === 'web'
     ? 'http://127.0.0.1:8000'
-    : 'http://10.100.102.15:8000';
+    : 'http://10.100.102.15:8000');
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -49,12 +50,34 @@ export interface ApiEvent {
   created_at: string;
 }
 
+export interface ApiCsiState {
+  provider_mode: 'real' | 'mock' | 'disabled' | 'legacy' | string;
+  receiving_data: boolean;
+  ready: boolean;
+  currently_detected: boolean;
+  recently_detected: boolean;
+  motion_metric: number | null;
+  baseline: number | null;
+  threshold: number | null;
+  baseline_factor: number;
+  confidence: number;
+  frames_received: number;
+  invalid_frames: number;
+  last_packet_at: string | null;
+  last_error: string | null;
+}
+
 export interface ApiSystemState {
   mode: ApiSecurityMode;
   security_mode: ApiSecurityMode;
   security_mode_updated_by_role: ApiUserRole | 'SYSTEM' | null;
   security_mode_updated_at: string | null;
   csi_presence_detected: boolean;
+  csi?: ApiCsiState;
+  probe_activity_detected?: boolean;
+  probe_observation_count?: number;
+  arp_scanner_healthy?: boolean;
+  arp_last_received_at?: string | null;
   approved_user_present: boolean;
   admin_present: boolean;
   family_present: boolean;
@@ -76,6 +99,11 @@ export interface ApiMonitoringCycle {
   mode: ApiSecurityMode;
   security_mode: ApiSecurityMode;
   csi_presence_detected: boolean;
+  csi?: ApiCsiState;
+  probe_activity_detected?: boolean;
+  probe_observation_count?: number;
+  arp_scanner_healthy?: boolean;
+  arp_last_received_at?: string | null;
   approved_user_present: boolean;
   admin_present: boolean;
   family_present: boolean;

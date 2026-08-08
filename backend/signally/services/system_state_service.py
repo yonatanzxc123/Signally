@@ -11,6 +11,7 @@ from signally.config import (
     ALERT_COOLDOWN_SECONDS,
     EVENT_BLOCKED_DEVICE_ALERT,
     EVENT_UNAUTHORIZED_PRESENCE_ALERT,
+    LOCAL_ARP_SCAN_ENABLED,
 )
 from signally.models.correlation_models import (
     ConnectedPresenceSnapshot,
@@ -28,6 +29,7 @@ from signally.services.event_service import EventService
 from signally.services.presence_service import PresenceService
 from signally.services.security_mode_service import SecurityModeService
 from signally.wifi_probing.wifi_probing_service import WifiProbingService
+from signally.sensors.csi_provider import CsiState
 
 
 ALERT_EVENT_TYPES = (
@@ -41,6 +43,7 @@ class SystemStateSnapshot:
     security_state: SecurityState
     csi_presence_detected: bool
     csi_presence_strength: Optional[float]
+    csi_state: CsiState
     connected_presence: ConnectedPresenceSnapshot
     nearby_presence: NearbyPresenceSnapshot
     decision: CorrelationDecision
@@ -72,11 +75,13 @@ class SystemStateService:
         csi_provider,
         scanner: Optional[NetworkScanner] = None,
         alert_cooldown_seconds: int = ALERT_COOLDOWN_SECONDS,
+        local_scan_enabled: bool = LOCAL_ARP_SCAN_ENABLED,
     ) -> None:
         self.session = session
         self.csi_provider = csi_provider
         self.scanner = scanner or NetworkScanner()
         self.alert_cooldown_seconds = alert_cooldown_seconds
+        self.local_scan_enabled = local_scan_enabled
         self.device_service = DeviceService(session)
         self.event_service = EventService(session)
         self.presence_service = PresenceService(session)
@@ -93,7 +98,7 @@ class SystemStateService:
         processed_devices_count = 0
         scan_error = None
 
-        if run_scan:
+        if run_scan and self.local_scan_enabled:
             try:
                 discovered = self.scanner.scan()
                 processed = self.device_service.process_scan_results(discovered)
@@ -102,8 +107,20 @@ class SystemStateService:
                 self.session.rollback()
                 scan_error = str(exc)
 
-        csi_detected = self.csi_provider.is_presence_detected()
-        csi_strength = self.csi_provider.get_presence_strength()
+        if hasattr(self.csi_provider, "get_state"):
+            csi_state = self.csi_provider.get_state()
+        else:
+            detected = self.csi_provider.is_presence_detected()
+            csi_state = CsiState(
+                provider_mode="legacy",
+                receiving_data=True,
+                ready=True,
+                currently_detected=detected,
+                recently_detected=detected,
+                motion_metric=self.csi_provider.get_presence_strength(),
+            )
+        csi_detected = csi_state.recently_detected
+        csi_strength = csi_state.motion_metric
         connected_presence = self.presence_service.get_presence_snapshot()
         nearby_presence = self.wifi_probing_service.get_presence_snapshot()
         security_state = self.security_mode_service.get_state()
@@ -129,6 +146,7 @@ class SystemStateService:
             security_state=security_state,
             csi_presence_detected=csi_detected,
             csi_presence_strength=csi_strength,
+            csi_state=csi_state,
             connected_presence=connected_presence,
             nearby_presence=nearby_presence,
             decision=decision,

@@ -25,6 +25,11 @@ class FakeCsiProvider:
         return self.strength
 
 
+class FailingScanner:
+    def scan(self):
+        raise AssertionError("local scanner should be disabled")
+
+
 def build_session():
     engine = create_engine("sqlite:///:memory:", future=True)
     Base.metadata.create_all(bind=engine)
@@ -92,3 +97,18 @@ def test_different_alert_details_are_not_suppressed():
         .all()
     )
     assert len(alerts) == 2
+
+
+def test_external_arp_mode_skips_the_pi_local_scanner():
+    session = build_session()
+    service = SystemStateService(
+        session,
+        FakeCsiProvider(),
+        scanner=FailingScanner(),
+        local_scan_enabled=False,
+    )
+
+    snapshot = service.collect_state(run_scan=True)
+
+    assert snapshot.scan_error is None
+    assert snapshot.processed_devices_count == 0

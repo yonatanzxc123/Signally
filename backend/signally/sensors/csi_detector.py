@@ -97,6 +97,24 @@ class CsiMotionDetector:
         self._baseline = None
         self._frames_seen = 0
 
+    @property
+    def baseline(self) -> Optional[float]:
+        return self._baseline
+
+    @property
+    def threshold(self) -> Optional[float]:
+        if self._baseline is None:
+            return None
+        return self._baseline * self.baseline_factor
+
+    @property
+    def frames_seen(self) -> int:
+        return self._frames_seen
+
+    @property
+    def ready(self) -> bool:
+        return self._baseline is not None and self._frames_seen > self.baseline_warmup
+
     def update(self, amplitudes: np.ndarray) -> PresenceReading:
         """Feed one frame's per-subcarrier amplitudes, get a presence reading."""
         self._frames_seen += 1

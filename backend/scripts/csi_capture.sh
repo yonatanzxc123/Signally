@@ -14,6 +14,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # Keep NetworkManager from retuning the dedicated CSI radio.
+rfkill unblock wifi
 nmcli dev disconnect "$INTERFACE" >/dev/null 2>&1 || true
 nmcli dev set "$INTERFACE" managed no
 ip link set "$INTERFACE" up

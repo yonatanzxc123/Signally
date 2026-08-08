@@ -171,6 +171,27 @@ def test_home_mode_csi_without_recent_phone_is_occupied_not_intruder():
     assert decision.notification_audience == ["ADMIN"]
 
 
+def test_probe_activity_is_evidence_not_an_intruder_count():
+    session = build_session()
+    _, _, _, presence_service = build_services(session)
+    nearby_presence = WifiProbingService(session).get_presence_snapshot()
+    nearby_presence.probe_activity_detected = True
+    nearby_presence.nearby_probe_count = 7
+
+    decision = CorrelationService().evaluate(
+        CorrelationContext(
+            csi_presence_detected=False,
+            nearby_device_count=7,
+            connected_presence=presence_service.get_presence_snapshot(),
+            nearby_presence=nearby_presence,
+            security_mode=SecurityMode.AWAY,
+        )
+    )
+
+    assert decision.decision == "ALERT"
+    assert decision.current_intruder_count == 0
+
+
 def test_reset_database_content_deletes_devices_and_users():
     session = build_session()
     device_service, _, admin_manager, _ = build_services(session)

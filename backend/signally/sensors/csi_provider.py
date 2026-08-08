@@ -12,6 +12,8 @@ unchanged, so nothing downstream (dependencies.py, system_state_service, the
 /csi endpoints) has to change.
 """
 
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional
 import threading
 import socket
@@ -22,23 +24,48 @@ from signally.config import (
     CSI_BASELINE_FACTOR,
     CSI_BASELINE_WARMUP,
     CSI_HAMPEL_SIGMA,
+    CSI_DETECTION_HOLD_SECONDS,
     CSI_REAL_PROVIDER_ENABLED,
     CSI_UDP_IP,
     CSI_UDP_PORT,
     CSI_VARIANCE_WINDOW,
+    CSI_STALE_AFTER_SECONDS,
+    CSI_WARMUP_SECONDS,
 )
 from signally.sensors.csi_detector import CsiMotionDetector
 from signally.sensors.csi_frame import parse_csi_frame
 
 logger = logging.getLogger(__name__)
+_SUPPORTED_SUBCARRIER_COUNTS = frozenset((64, 128, 256))
+
+
+@dataclass(frozen=True)
+class CsiState:
+    provider_mode: str
+    receiving_data: bool = False
+    ready: bool = False
+    currently_detected: bool = False
+    recently_detected: bool = False
+    motion_metric: Optional[float] = None
+    baseline: Optional[float] = None
+    threshold: Optional[float] = None
+    baseline_factor: float = CSI_BASELINE_FACTOR
+    confidence: float = 0.0
+    frames_received: int = 0
+    invalid_frames: int = 0
+    last_packet_at: Optional[datetime] = None
+    last_error: Optional[str] = None
 
 
 class CsiDetectionProvider:
-    def is_presence_detected(self) -> bool:
+    def get_state(self) -> CsiState:
         raise NotImplementedError
 
+    def is_presence_detected(self) -> bool:
+        return self.get_state().recently_detected
+
     def get_presence_strength(self) -> Optional[float]:
-        return None
+        return self.get_state().motion_metric
 
 
 # --- MOCK PROVIDER (For Presentation & Testing) ---
@@ -53,6 +80,16 @@ class FlagCsiDetectionProvider(CsiDetectionProvider):
 
     def get_presence_strength(self) -> Optional[float]:
         return self._strength
+
+    def get_state(self) -> CsiState:
+        return CsiState(
+            provider_mode="mock",
+            receiving_data=True,
+            ready=True,
+            currently_detected=self._detected,
+            recently_detected=self._detected,
+            motion_metric=self._strength,
+        )
 
     def set_detected(self, value: bool) -> None:
         self._detected = value
@@ -72,6 +109,9 @@ class RealCsiDetectionProvider(CsiDetectionProvider):
         baseline_factor: float = CSI_BASELINE_FACTOR,
         baseline_warmup: int = CSI_BASELINE_WARMUP,
         hampel_sigma: float = CSI_HAMPEL_SIGMA,
+        stale_after_seconds: float = CSI_STALE_AFTER_SECONDS,
+        detection_hold_seconds: float = CSI_DETECTION_HOLD_SECONDS,
+        warmup_seconds: float = CSI_WARMUP_SECONDS,
     ) -> None:
         self._detected = False
         self._strength = 0.0
@@ -80,6 +120,16 @@ class RealCsiDetectionProvider(CsiDetectionProvider):
         self.udp_ip = udp_ip
         self.udp_port = udp_port
         self._last_packet_time = 0.0  # when we last got a real CSI frame
+        self._last_detection_time = 0.0
+        self._started_time = time.monotonic()
+        self._frames_received = 0
+        self._invalid_frames = 0
+        self._last_error: Optional[str] = None
+        self._frame_width: Optional[int] = None
+        self._lock = threading.Lock()
+        self._stale_after_seconds = stale_after_seconds
+        self._detection_hold_seconds = detection_hold_seconds
+        self._warmup_seconds = warmup_seconds
 
         self._detector = CsiMotionDetector(
             window_size=window_size,
@@ -93,17 +143,43 @@ class RealCsiDetectionProvider(CsiDetectionProvider):
         self._thread.start()
 
     def is_receiving_data(self) -> bool:
-        # True if a real CSI frame arrived in the last 3 seconds.
-        return (time.time() - self._last_packet_time) < 3.0
+        return self.get_state().receiving_data
 
     def is_presence_detected(self) -> bool:
-        return self._detected
+        return self.get_state().recently_detected
 
     def get_presence_strength(self) -> Optional[float]:
-        return self._strength
+        return self.get_state().motion_metric
 
     def get_confidence(self) -> float:
-        return self._confidence
+        return self.get_state().confidence
+
+    def get_state(self) -> CsiState:
+        now = time.monotonic()
+        with self._lock:
+            receiving = self._last_packet_time > 0 and now - self._last_packet_time < self._stale_after_seconds
+            ready = receiving and self._detector.ready and now - self._started_time >= self._warmup_seconds
+            recent = ready and self._last_detection_time > 0 and now - self._last_detection_time <= self._detection_hold_seconds
+            packet_at = None
+            if self._last_packet_time > 0:
+                age = max(0.0, now - self._last_packet_time)
+                packet_at = datetime.fromtimestamp(time.time() - age, tz=timezone.utc)
+            return CsiState(
+                provider_mode="real",
+                receiving_data=receiving,
+                ready=ready,
+                currently_detected=ready and self._detected,
+                recently_detected=recent,
+                motion_metric=self._strength,
+                baseline=self._detector.baseline,
+                threshold=self._detector.threshold,
+                baseline_factor=self._detector.baseline_factor,
+                confidence=self._confidence,
+                frames_received=self._frames_received,
+                invalid_frames=self._invalid_frames,
+                last_packet_at=packet_at,
+                last_error=self._last_error,
+            )
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -119,6 +195,9 @@ class RealCsiDetectionProvider(CsiDetectionProvider):
             logger.info("Real CSI Provider listening on %s:%s", self.udp_ip, self.udp_port)
         except Exception as e:
             logger.error("Failed to bind CSI socket: %s", e)
+            with self._lock:
+                self._last_error = str(e)
+            sock.close()
             return
 
         while not self._stop_event.is_set():
@@ -130,15 +209,39 @@ class RealCsiDetectionProvider(CsiDetectionProvider):
                 logger.error("CSI Stream Error: %s", e)
                 continue
 
-            frame = parse_csi_frame(data)
-            if frame is None:
-                continue  # not a valid CSI datagram - ignore
-
-            self._last_packet_time = time.time()
-            reading = self._detector.update(frame.amplitudes)
-            self._detected = reading.detected
-            self._strength = reading.motion_metric
-            self._confidence = reading.confidence
+            try:
+                frame = parse_csi_frame(data)
+                if frame is None:
+                    with self._lock:
+                        self._invalid_frames += 1
+                    continue
+                width = frame.subcarrier_count
+                if width not in _SUPPORTED_SUBCARRIER_COUNTS:
+                    with self._lock:
+                        self._invalid_frames += 1
+                        self._last_error = "Unsupported CSI frame width: {0}".format(width)
+                    continue
+                with self._lock:
+                    if self._frame_width is not None and width != self._frame_width:
+                        self._invalid_frames += 1
+                        self._last_error = "CSI frame width changed from {0} to {1}".format(self._frame_width, width)
+                        continue
+                    self._frame_width = width
+                    reading = self._detector.update(frame.amplitudes)
+                    now = time.monotonic()
+                    self._last_packet_time = now
+                    self._frames_received += 1
+                    self._detected = reading.detected
+                    self._strength = reading.motion_metric
+                    self._confidence = reading.confidence
+                    self._last_error = None
+                    if reading.detected:
+                        self._last_detection_time = now
+            except Exception as e:
+                logger.exception("CSI frame processing error: %s", e)
+                with self._lock:
+                    self._invalid_frames += 1
+                    self._last_error = str(e)
 
         sock.close()
 
@@ -154,14 +257,15 @@ class AutoFallbackCsiProvider(CsiDetectionProvider):
         self.mock = FlagCsiDetectionProvider()
 
     def is_presence_detected(self) -> bool:
-        if self.real is not None and self.real.is_receiving_data():
-            return self.real.is_presence_detected()
-        return self.mock.is_presence_detected()
+        return self.get_state().recently_detected
 
     def get_presence_strength(self) -> Optional[float]:
-        if self.real is not None and self.real.is_receiving_data():
-            return self.real.get_presence_strength()
-        return self.mock.get_presence_strength()
+        return self.get_state().motion_metric
+
+    def get_state(self) -> CsiState:
+        if self.real is not None:
+            return self.real.get_state()
+        return self.mock.get_state()
 
     def is_using_real(self) -> bool:
         return self.real is not None and self.real.is_receiving_data()

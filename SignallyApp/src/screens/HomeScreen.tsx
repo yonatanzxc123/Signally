@@ -303,6 +303,13 @@ export default function HomeScreen() {
             <Text style={styles.decisionMeta}>
               Unknown {systemState?.unknown_devices ?? 0} - Nearby probes {systemState?.nearby_probe_count ?? 0} - Alerts {systemState?.recent_alerts?.length ?? 0}
             </Text>
+            <Text style={styles.decisionMeta}>
+              CSI {systemState?.csi?.ready
+                ? systemState.csi.recently_detected ? 'motion' : 'online'
+                : systemState?.csi?.receiving_data ? 'calibrating' : 'unavailable'}
+              {' - '}Probe activity {systemState?.probe_activity_detected ? 'active' : 'quiet'}
+              {' - '}ARP {systemState?.arp_scanner_healthy ? 'online' : 'stale'}
+            </Text>
           </View>
         </View>
 

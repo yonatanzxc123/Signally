@@ -25,12 +25,10 @@ class CorrelationService:
         away_mode = security_mode == SecurityMode.AWAY
         connected_intruder_count = len(context.connected_presence.pending_connected_devices)
         nearby_probe_count = context.nearby_presence.nearby_probe_count
-        nearby_probe_activity = nearby_probe_count > 0
-        current_intruder_count = (
-            connected_intruder_count
-            + nearby_probe_count
-            + (1 if csi_detected and not approved_present else 0)
-        )
+        nearby_probe_activity = context.nearby_presence.probe_activity_detected or nearby_probe_count > 0
+        # Probe MACs are frequently randomized and CSI is physical evidence, so
+        # neither is an authoritative device/intruder count.
+        current_intruder_count = connected_intruder_count
         review_grace_active = self._is_admin_review_grace_active(context)
 
         # 1. CRITICAL: Blocked device on the network
@@ -51,7 +49,7 @@ class CorrelationService:
             )
 
         # 2. HOME: unknown connected device — soft review, no loud alert
-        if current_intruder_count > 0 and not away_mode:
+        if connected_intruder_count > 0 and not away_mode:
             audience = ["ADMIN"] if review_grace_active else ["ADMIN", "FAMILY"]
             return CorrelationDecision(
                 decision="REVIEW",
@@ -70,7 +68,7 @@ class CorrelationService:
             )
 
         # 3. AWAY REVIEW: unknown connected device while admin is home within grace window
-        if current_intruder_count > 0 and admin_present and review_grace_active:
+        if connected_intruder_count > 0 and admin_present and review_grace_active:
             return CorrelationDecision(
                 decision="REVIEW",
                 severity="MEDIUM",
@@ -88,7 +86,7 @@ class CorrelationService:
             )
 
         # 4. AWAY ALERT: unknown connected device, no grace or no admin
-        if current_intruder_count > 0:
+        if connected_intruder_count > 0:
             return CorrelationDecision(
                 decision="ALERT",
                 severity="HIGH" if csi_detected else "MEDIUM",
@@ -117,7 +115,7 @@ class CorrelationService:
                 admin_present=admin_present,
                 family_present=family_present,
                 guest_present=guest_present,
-                current_intruder_count=nearby_probe_count,
+                current_intruder_count=0,
                 notification_audience=["ADMIN", "FAMILY"],
             )
 
@@ -134,6 +132,7 @@ class CorrelationService:
                 admin_present=admin_present,
                 family_present=family_present,
                 guest_present=guest_present,
+                notification_audience=["ADMIN"],
             )
 
         # 7. AWAY ALERT: CSI motion, no authorized phone home

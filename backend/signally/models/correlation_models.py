@@ -41,6 +41,8 @@ class ConnectedPresenceSnapshot:
 @dataclass
 class NearbyPresenceSnapshot:
     nearby_probe_count: int = 0
+    probe_activity_detected: bool = False
+    probe_observation_count: int = 0
     first_probe_seen_at: Optional[datetime] = None
     window_seconds: int = 30
 
