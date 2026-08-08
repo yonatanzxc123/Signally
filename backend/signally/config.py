@@ -60,7 +60,7 @@ CSI_UDP_PORT = int(os.getenv("SIGNALLY_CSI_UDP_PORT", "5500"))
 CSI_VARIANCE_WINDOW = int(os.getenv("SIGNALLY_CSI_VARIANCE_WINDOW", "50"))
 # Motion is flagged when the variance metric exceeds baseline * factor.
 # Calibrate against a real empty-room baseline once hardware is running.
-CSI_BASELINE_FACTOR = float(os.getenv("SIGNALLY_CSI_BASELINE_FACTOR", "3.0"))
+CSI_BASELINE_FACTOR = float(os.getenv("SIGNALLY_CSI_BASELINE_FACTOR", "1.3"))
 # Frames to observe (assumed empty room) before any detection is emitted.
 CSI_BASELINE_WARMUP = int(os.getenv("SIGNALLY_CSI_BASELINE_WARMUP", "30"))
 # Outlier threshold (in MADs) for the per-frame Hampel filter.
