@@ -4,6 +4,10 @@ This is the presentation workflow for the Raspberry Pi 5 Nexmon CSI receiver.
 It uses access-point beacon frames as the stable CSI source. The laptop does
 not need to run `iperf3` in beacon mode.
 
+The verified 2026-08-14 classroom topology, measurements, sensitivity, and
+next-session recovery checklist are recorded in
+[`classroom_csi_calibration_2026-08-14.md`](classroom_csi_calibration_2026-08-14.md).
+
 ## 1. Find the classroom router details
 
 Connect a Windows laptop to the classroom Wi-Fi and run:

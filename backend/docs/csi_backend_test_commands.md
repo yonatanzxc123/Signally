@@ -105,6 +105,13 @@ From Windows, replace `PI_IP` with the reachable Pi Ethernet or USB address:
 curl http://PI_IP:8000/system/state
 ```
 
+For the configured private USB-Ethernet link, connect from Windows with the
+dedicated SSH key:
+
+```powershell
+ssh -i C:\Users\idani\.ssh\signally_codex idanyo@10.12.194.1
+```
+
 Remember: `127.0.0.1` on Windows refers to Windows, not the Pi.
 
 ## 5. Inspect CSI Health
