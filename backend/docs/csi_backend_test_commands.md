@@ -69,6 +69,28 @@ sudo env \
 Uvicorn stays in the foreground while it is running. Keep this terminal open.
 Press `Ctrl+C` once and wait for graceful shutdown when finished.
 
+### Current classroom showcase launch
+
+This is the complete backend command block used after the August 2026
+classroom calibration. It uses the `1.20` CSI factor, a five-second CSI hold,
+the `-45 dBm` probe threshold, and ignores the two fixed classroom AP probe
+interfaces:
+
+```bash
+cd ~/Signally/backend
+
+export SIGNALLY_CSI_BASELINE_FACTOR=1.20
+export SIGNALLY_CSI_DETECTION_HOLD_SECONDS=5
+export SIGNALLY_WIFI_PROBING_STRONG_RSSI_MIN=-45
+export SIGNALLY_WIFI_PROBING_IGNORED_MACS=5C:A6:E6:83:23:CF,5C:A6:E6:83:23:CE
+
+sudo -E ../.venv/bin/python main.py serve-api --host 0.0.0.0 --port 8000
+```
+
+Real CSI is the backend default. Keep the CSI path empty and still for the
+first 30 seconds after launch so the adaptive baseline is calibrated from a
+quiet room.
+
 ### Classroom laptop-ARP architecture
 
 Disable the Pi's local ARP scanner and configure the shared ingest token:
