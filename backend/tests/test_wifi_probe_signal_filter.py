@@ -106,3 +106,26 @@ def test_repeated_probe_same_mac_counts_once_in_nearby_snapshot(monkeypatch):
     snapshot = service.get_presence_snapshot()
 
     assert snapshot.nearby_probe_count == 1
+
+
+def test_ignored_probe_mac_does_not_log_nearby_activity(monkeypatch):
+    monkeypatch.setattr(wifi_probing_module, "WIFI_PROBING_STRONG_RSSI_MIN", -60)
+    monkeypatch.setattr(
+        wifi_probing_module,
+        "WIFI_PROBING_IGNORED_MACS",
+        {"AA:BB:CC:DD:EE:06"},
+    )
+    session = build_session()
+    service = WifiProbingService(session)
+
+    service.handle_detection(
+        WifiProbeDetection(
+            mac_address="aa:bb:cc:dd:ee:06",
+            frame_type="probe_req",
+            ssid="ClassroomEquipment",
+            rssi=-35,
+        )
+    )
+
+    assert session.query(Event).count() == 0
+    assert service.get_presence_snapshot().nearby_probe_count == 0

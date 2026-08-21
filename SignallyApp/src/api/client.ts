@@ -126,6 +126,14 @@ export interface ApiMessage {
   message: string;
 }
 
+export interface ApiWifiProbingStatus {
+  running: boolean;
+  interface: string | null;
+  mock_mode: boolean;
+  started_at: string | null;
+  last_error: string | null;
+}
+
 export interface ApiSecurityModeState {
   mode: ApiSecurityMode;
   armed: boolean;
@@ -203,9 +211,13 @@ export const api = {
     }),
 
   // Wifi Probing
-  startWifiProbing: () => request<ApiMessage>('/wifi_probing/start', { method: 'POST' }),
+  startWifiProbing: () =>
+    request<ApiMessage>('/wifi_probing/start', {
+      method: 'POST',
+      body: JSON.stringify({ interface: 'wlan1', mock_mode: false }),
+    }),
   stopWifiProbing: () => request<ApiMessage>('/wifi_probing/stop', { method: 'POST' }),
-  getWifiProbingStatus: () => request<{ running: boolean; interface: string | null }>('/wifi_probing/status'),
+  getWifiProbingStatus: () => request<ApiWifiProbingStatus>('/wifi_probing/status'),
   getWifiProbingDevices: () => request<ApiDevice[]>('/wifi_probing/devices'),
 
   // Events

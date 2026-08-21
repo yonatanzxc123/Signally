@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
 } from 'react-native';
@@ -85,6 +86,28 @@ export default function HomeScreen() {
     },
   });
 
+  const { data: probingStatus, isLoading: probingStatusLoading } = useQuery({
+    queryKey: ['wifi-probing-status'],
+    queryFn: api.getWifiProbingStatus,
+    refetchInterval: 3_000,
+    retry: false,
+  });
+
+  const probingMutation = useMutation({
+    mutationFn: () =>
+      probingStatus?.running ? api.stopWifiProbing() : api.startWifiProbing(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wifi-probing-status'] });
+      queryClient.invalidateQueries({ queryKey: ['system-state'] });
+    },
+    onError: (error) => {
+      Alert.alert(
+        'Could not change probing',
+        error instanceof Error ? error.message : 'The backend did not accept the request.',
+      );
+    },
+  });
+
   const { data: systemState } = useQuery({
     queryKey: ['system-state'],
     queryFn: api.getSystemState,
@@ -127,9 +150,39 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Signally</Text>
-        <TouchableOpacity style={styles.avatar} onPress={() => setMenuVisible(true)}>
-          <Ionicons name="person-outline" size={20} color={colors.primary} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[
+              styles.probingButton,
+              probingStatus?.running ? styles.probingButtonOn : styles.probingButtonOff,
+            ]}
+            onPress={() => probingMutation.mutate()}
+            disabled={probingMutation.isPending || probingStatusLoading || !probingStatus}
+            accessibilityRole="button"
+            accessibilityLabel={`Turn Wi-Fi probing ${probingStatus?.running ? 'off' : 'on'}`}
+          >
+            {probingMutation.isPending || probingStatusLoading ? (
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+            ) : (
+              <Ionicons
+                name={probingStatus?.running ? 'radio' : 'radio-outline'}
+                size={16}
+                color={probingStatus?.running ? colors.secure : colors.textSecondary}
+              />
+            )}
+            <Text
+              style={[
+                styles.probingButtonText,
+                probingStatus?.running && styles.probingButtonTextOn,
+              ]}
+            >
+              {probingStatus?.running ? 'Probes On' : 'Probes Off'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.avatar} onPress={() => setMenuVisible(true)}>
+            <Ionicons name="person-outline" size={20} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <Modal
@@ -387,6 +440,37 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.primary,
     letterSpacing: 0.5,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  probingButton: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+    borderRadius: radius.full,
+    borderWidth: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  probingButtonOn: {
+    backgroundColor: colors.secureLight,
+    borderColor: colors.secure,
+  },
+  probingButtonOff: {
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+  },
+  probingButtonText: {
+    color: colors.textSecondary,
+    fontSize: font.sm,
+    fontWeight: '700',
+  },
+  probingButtonTextOn: {
+    color: colors.secure,
   },
   avatar: {
     width: 38,

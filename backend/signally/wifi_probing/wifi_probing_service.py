@@ -19,6 +19,7 @@ from signally.config import (
     EVENT_WIFI_PROBING_STARTED,
     EVENT_WIFI_PROBING_STOPPED,
     WIFI_PROBING_RECENT_EVENT_LIMIT,
+    WIFI_PROBING_IGNORED_MACS,
     WIFI_PROBING_STRONG_RSSI_MIN,
 )
 from signally.models.correlation_models import NearbyPresenceSnapshot
@@ -33,7 +34,11 @@ class WifiProbingService:
         self.event_service = EventService(session)
 
     def handle_detection(self, detection: WifiProbeDetection) -> None:
-        if detection.frame_type != "probe_req" or not self._has_strong_signal(detection):
+        if (
+            detection.frame_type != "probe_req"
+            or detection.mac_address.upper() in WIFI_PROBING_IGNORED_MACS
+            or not self._has_strong_signal(detection)
+        ):
             return
         self.event_service.log_event(
             event_type=EVENT_WIFI_PROBE_NEARBY_ACTIVITY,
