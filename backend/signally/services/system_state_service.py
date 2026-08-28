@@ -28,6 +28,7 @@ from signally.services.device_service import DeviceService
 from signally.services.event_service import EventService
 from signally.services.presence_service import PresenceService
 from signally.services.security_mode_service import SecurityModeService
+from signally.services.timeline_service import TimelineService
 from signally.wifi_probing.wifi_probing_service import WifiProbingService
 from signally.sensors.csi_provider import CsiState
 
@@ -102,6 +103,9 @@ class SystemStateService:
             try:
                 discovered = self.scanner.scan()
                 processed = self.device_service.process_scan_results(discovered)
+                TimelineService(self.session).reconcile_scan(
+                    {device.mac_address for device in discovered}
+                )
                 processed_devices_count = len(processed)
             except Exception as exc:
                 self.session.rollback()

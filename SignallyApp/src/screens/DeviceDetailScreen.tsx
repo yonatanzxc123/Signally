@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { useDevices } from '../context/DevicesContext';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { colors, font, radius, spacing } from '../theme';
+import FamilyNameModal from '../components/FamilyNameModal';
 
 type Props = NativeStackScreenProps<DevicesStackParamList, 'DeviceDetail'>;
 
@@ -27,7 +28,8 @@ const STATUS_CONFIG = {
 
 export default function DeviceDetailScreen({ route, navigation }: Props) {
   const { deviceId } = route.params;
-  const { devices, approveDevice, blockDevice, canManageDevices } = useDevices();
+  const { devices, approveDevice, nameFamilyDevice, blockDevice, canManageDevices } = useDevices();
+  const [nameMode, setNameMode] = useState<'approve' | 'rename' | null>(null);
   const { role } = useAuth();
   const queryClient = useQueryClient();
   const device = devices.find((d) => d.id === deviceId);
@@ -92,6 +94,16 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
           <InfoRow icon="time-outline" label="Last Seen" value={device.lastSeen} />
         </View>
 
+        {device.status === 'approved' && device.ownerRole === 'FAMILY' && canManageDevices && (
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: colors.approvedLight }]}
+            onPress={() => setNameMode('rename')}
+          >
+            <Ionicons name="create-outline" size={20} color={colors.approved} />
+            <Text style={[styles.actionBtnText, { color: colors.approved }]}>Rename Family Device</Text>
+          </TouchableOpacity>
+        )}
+
         {device.ip && canManageDevices && (
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: '#EFF6FF' }]}
@@ -109,7 +121,7 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
           <>
             <TouchableOpacity
               style={[styles.actionBtn, { backgroundColor: colors.approvedLight }]}
-              onPress={() => { approveDevice(device.id, 'FAMILY'); navigation.goBack(); }}
+              onPress={() => setNameMode('approve')}
             >
               <Ionicons name="people-outline" size={20} color={colors.approved} />
               <Text style={[styles.actionBtnText, { color: colors.approved }]}>Approve as Family Member</Text>
@@ -134,6 +146,16 @@ export default function DeviceDetailScreen({ route, navigation }: Props) {
           </TouchableOpacity>
         )}
       </ScrollView>
+      <FamilyNameModal
+        visible={nameMode !== null}
+        initialName={nameMode === 'rename' && device.name !== 'Unknown Device' ? device.name : ''}
+        onCancel={() => setNameMode(null)}
+        onSave={(name) => {
+          if (nameMode === 'approve') approveDevice(device.id, 'FAMILY', name);
+          else nameFamilyDevice(device.id, name);
+          setNameMode(null);
+        }}
+      />
     </SafeAreaView>
   );
 }

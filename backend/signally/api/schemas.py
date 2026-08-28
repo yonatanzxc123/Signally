@@ -188,6 +188,21 @@ class UserCreateRequest(BaseModel):
 
 class ApproveDeviceRequest(BaseModel):
     owner_role: str  # must be FAMILY or GUEST
+    owner_name: Optional[str] = None
+
+
+class SetFamilyMemberNameRequest(BaseModel):
+    owner_name: str
+
+    @field_validator("owner_name")
+    @classmethod
+    def valid_owner_name(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Family member name is required")
+        if len(cleaned) > 100:
+            raise ValueError("Family member name must be 100 characters or fewer")
+        return cleaned
 
 
 class SetDeviceHostnameHintRequest(BaseModel):

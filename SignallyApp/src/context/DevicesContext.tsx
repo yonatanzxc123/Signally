@@ -8,7 +8,8 @@ interface DevicesContextValue {
   devices: Device[];
   isLoading: boolean;
   error: Error | null;
-  approveDevice: (id: string, ownerRole: 'FAMILY' | 'GUEST') => void;
+  approveDevice: (id: string, ownerRole: 'FAMILY' | 'GUEST', ownerName?: string) => void;
+  nameFamilyDevice: (id: string, ownerName: string) => void;
   approveAllUnknownDevices: (ownerRole: 'FAMILY' | 'GUEST') => void;
   blockDevice: (id: string) => void;
   canManageDevices: boolean;
@@ -158,8 +159,8 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
   }
 
   const approveMutation = useMutation({
-    mutationFn: ({ mac, ownerRole }: { mac: string; ownerRole: 'FAMILY' | 'GUEST' }) =>
-      api.approveDevice(mac, ownerRole, role),
+    mutationFn: ({ mac, ownerRole, ownerName }: { mac: string; ownerRole: 'FAMILY' | 'GUEST'; ownerName?: string }) =>
+      api.approveDevice(mac, ownerRole, role, ownerName),
     onMutate: async ({ mac, ownerRole }) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: ['devices'] }),
@@ -265,6 +266,16 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
     },
   });
 
+  const nameMutation = useMutation({
+    mutationFn: ({ mac, ownerName }: { mac: string; ownerName: string }) =>
+      api.setFamilyDeviceName(mac, ownerName, role),
+    onSuccess: (updated) => patchDeviceInCache(updated),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      queryClient.invalidateQueries({ queryKey: ['system-state'] });
+    },
+  });
+
   const devices = useMemo(
     () =>
       [...(data ?? [])]
@@ -291,11 +302,14 @@ export function DevicesProvider({ children }: { children: React.ReactNode }) {
         devices,
         isLoading,
         error: error as Error | null,
-        approveDevice: (id, ownerRole) => {
+        approveDevice: (id, ownerRole, ownerName) => {
           if (isAdmin) {
             optimisticallyUpdateStatus(id, 'AUTHORIZED', ownerRole as ApiDevice['owner_role']);
-            approveMutation.mutate({ mac: id, ownerRole });
+            approveMutation.mutate({ mac: id, ownerRole, ownerName });
           }
+        },
+        nameFamilyDevice: (id, ownerName) => {
+          if (isAdmin) nameMutation.mutate({ mac: id, ownerName });
         },
         approveAllUnknownDevices: (ownerRole) => {
           if (isAdmin) {

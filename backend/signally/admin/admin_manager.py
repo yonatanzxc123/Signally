@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from signally.models.device import Device, DeviceStatus
 from signally.models.security_mode import SecurityMode, SecurityState
+from signally.models.presence_state import PresenceState
 from signally.models.user import UserRole
 from signally.services.device_service import DeviceService
 from signally.services.event_service import EventService
@@ -29,11 +30,14 @@ class AdminManager:
         mac_address: str,
         owner_role: UserRole | str,
         actor_role: UserRole | str = UserRole.ADMIN,
+        owner_name: str | None = None,
     ) -> Device:
         self.user_service.require_admin(actor_role)
         role_value = owner_role.value if isinstance(owner_role, UserRole) else owner_role
         device = self.device_service.update_status(mac_address, DeviceStatus.AUTHORIZED)
+        self._clear_presence_state(device.mac_address)
         device.owner_role = role_value
+        device.owner_name = owner_name.strip() if role_value == "FAMILY" and owner_name else None
         device.approved_at = utc_now()
         self.device_service.session.commit()
         self.event_service.log_event(
@@ -54,8 +58,10 @@ class AdminManager:
         now = utc_now()
 
         for device in devices:
+            self._clear_presence_state(device.mac_address)
             device.status = DeviceStatus.AUTHORIZED
             device.owner_role = role_value
+            device.owner_name = None
             device.approved_at = now
             device.last_seen = now
             self.event_service.log_event(
@@ -74,6 +80,8 @@ class AdminManager:
     ) -> Device:
         self.user_service.require_admin(actor_role)
         device = self.device_service.update_status(mac_address, DeviceStatus.BLOCKED)
+        self._clear_presence_state(device.mac_address)
+        device.owner_name = None
         self.event_service.log_event(
             event_type="DEVICE_BLOCKED",
             details="Admin blocked device",
@@ -87,6 +95,7 @@ class AdminManager:
         actor_role: UserRole | str = UserRole.ADMIN,
     ) -> None:
         self.user_service.require_admin(actor_role)
+        self._clear_presence_state(mac_address)
         self.device_service.delete_device(mac_address)
         self.event_service.log_event(
             event_type="DEVICE_DELETED",
@@ -102,6 +111,9 @@ class AdminManager:
 
     def reset_database_content(self) -> dict:
         deleted_users = self.user_service.delete_all_users()
+
+        self.device_service.session.query(PresenceState).delete()
+        self.device_service.session.commit()
 
         devices = self.device_service.list_all_devices()
         deleted_devices = len(devices)
@@ -132,3 +144,9 @@ class AdminManager:
 
     def list_pending_devices(self) -> list[Device]:
         return self.device_service.list_pending_devices()
+
+    def _clear_presence_state(self, mac_address: str) -> None:
+        state = self.device_service.session.get(PresenceState, mac_address.upper())
+        if state is not None:
+            self.device_service.session.delete(state)
+            self.device_service.session.flush()

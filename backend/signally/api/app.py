@@ -53,6 +53,7 @@ from signally.api.schemas import (
     LoginRequest,
     MessageResponse,
     SetCsiPresenceRequest,
+    SetFamilyMemberNameRequest,
     SetSecurityModeRequest,
     SecurityModeResponse,
     SignupRequest,
@@ -66,6 +67,7 @@ from signally.api.schemas import (
 from signally.models.security_mode import SecurityMode
 from signally.models.user import UserRole
 from signally.services.connected_inspection_service import ConnectedInspectionService
+from signally.services.timeline_service import TimelineService
 
 
 app = FastAPI(title="Signally API", version="1.0.0")
@@ -82,6 +84,7 @@ def to_device_response(device) -> DeviceResponse:
         status=device.status.value if hasattr(device.status, "value") else str(device.status),
         first_seen=device.first_seen,
         last_seen=device.last_seen,
+        owner_name=device.owner_name,
         owner_role=device.owner_role,
     )
 
@@ -417,6 +420,7 @@ def scan_network():
 
         services = build_services(session)
         processed = services["device_service"].process_scan_results(discovered)
+        TimelineService(session).reconcile_scan({device.mac_address for device in discovered})
 
         return [
             to_device_response(device)
@@ -456,6 +460,7 @@ def ingest_arp_scan(
     try:
         services = build_services(session)
         processed = services["device_service"].process_scan_results(discovered)
+        TimelineService(session).reconcile_scan({device.mac_address for device in discovered}, received_at)
         arp_scan_tracker.complete(
             request.scan_id,
             captured_at,
@@ -556,12 +561,38 @@ def approve_device(
                 mac_address,
                 actor_role=parse_actor_role(x_signally_user_role),
                 owner_role=owner_role,
+                owner_name=request.owner_name,
             )
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc))
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
         return to_device_response(device)
+    finally:
+        session.close()
+
+
+@app.put("/devices/{mac_address}/family-name", response_model=DeviceResponse)
+def set_family_device_name(
+    mac_address: str,
+    request: SetFamilyMemberNameRequest,
+    x_signally_user_role: Optional[str] = Header(default=None),
+):
+    session = get_db_session()
+    try:
+        services = build_services(session)
+        try:
+            services["user_service"].require_admin(parse_actor_role(x_signally_user_role))
+            device = services["device_service"].get_by_mac(mac_address)
+            if device is None:
+                raise HTTPException(status_code=404, detail="Device was not found")
+            return to_device_response(
+                TimelineService(session).set_family_member_name(device, request.owner_name)
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
     finally:
         session.close()
 
@@ -617,6 +648,16 @@ def list_events(limit: int = 50):
     try:
         services = build_services(session)
         events = services["event_service"].list_recent_events(limit=limit)
+        return [to_event_response(event) for event in events]
+    finally:
+        session.close()
+
+
+@app.get("/timeline", response_model=list[EventResponse])
+def list_family_timeline(limit: int = 100):
+    session = get_db_session()
+    try:
+        events = TimelineService(session).list_timeline(limit=max(1, min(limit, 500)))
         return [to_event_response(event) for event in events]
     finally:
         session.close()
