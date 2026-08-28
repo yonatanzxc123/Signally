@@ -68,14 +68,30 @@ Completed in the current integration pass:
 - [x] CSI capture script unblocks RF-kill and the service path is configurable.
 - [x] Add `backend/docs/csi_backend_test_commands.md` as the consolidated Pi,
   backend, frontend, CSI, probe, and laptop-ARP test command sheet.
+- [x] Add `backend/docs/correlation_flow.md` as the detailed, code-accurate guide
+  covering the runtime call chain, evidence lifetimes, ordered correlation
+  rules, count semantics, alert persistence, API/frontend mapping, failure
+  behavior, relevant implementation files, and a function/line-level walkthrough
+  of every evidence path and correlation branch, including attributed source
+  excerpts for the laptop agent, backend ingestion, sensors, all nine rules,
+  alert cycle, and frontend polling.
+  to ARP, CSI, probing, rule priority, counts, and current policy status.
+- [x] Document a Windows-only backend workflow with hardware loops disabled and
+  mock CSI enabled for auth/frontend testing through the Android emulator.
 - [x] Automated provider, ingestion, and probe/correlation regression tests.
 
 Still open after this pass:
 
+- [x] Do not add CSI calibration/reset or database-reset buttons; they are not
+  required for the intended classroom workflow. Existing backend maintenance
+  endpoints may remain available outside the main UI.
 - [ ] Classroom RSSI, channel, BSSID, and CSI threshold calibration.
 - [ ] USB gadget installation and repeated cold-boot validation on the Pi.
 - [ ] Windows/Npcap validation of the laptop ARP agent on classroom Wi-Fi.
 - [ ] Full Pi hardware acceptance and long false-positive soak.
+- [ ] Implement Pi-initiated ARP scan requests if that remains the required
+  architecture. The current laptop agent scans periodically on its own and
+  pushes results to the Pi; the Pi does not currently command the laptop.
 
 ## Main-Branch Compatibility Audit — 2026-08-08
 
@@ -118,7 +134,7 @@ Intentional semantic corrections relative to `main`:
 
 Remaining acceptance constraints, not merge regressions:
 
-- [ ] Validate Pi USB Ethernet gadget data/SSH, not just USB power.
+- [x] Validate Pi USB Ethernet gadget data and SSH over the laptop-to-Pi cable.
 - [ ] Set and test the classroom runtime environment, including real CSI,
   external ARP mode, ingest token, interfaces, channel, bandwidth, and BSSID.
 - [ ] Validate the Windows laptop agent with Npcap/admin rights.
@@ -347,14 +363,15 @@ port to the Pi USB-C port, but the complete Pi 5 load must still be tested for
 undervoltage and stability.
 
 - [ ] Confirm the selected cable carries data, not power only.
-- [ ] Confirm `usb0`, SSH, and FastAPI appear over that cable.
+- [x] Confirm the USB gadget interface and SSH appear over that cable.
+- [ ] Confirm FastAPI is reachable over the same USB gadget address.
 - [ ] Check `vcgencmd get_throttled` during CSI, probing, and backend load.
 
 Observed hardware result:
 
 - [x] A laptop USB-A to Pi USB-C cable successfully powers and boots the Pi 5.
-- [ ] Confirm the same cable is data-capable and creates the `usb0` gadget
-  interface; successful power alone does not prove USB networking.
+- [x] Confirm the same cable is data-capable and creates the USB gadget network;
+  SSH over the cable was tested successfully.
 - [ ] Confirm sustained power stability under simultaneous Nexmon CSI, USB Wi-Fi
   probing, FastAPI, SQLite, and USB network traffic.
 
@@ -390,9 +407,9 @@ a recent-transition window, consumable authorization, or special
 `AWAY -> HOME` entry event or CSI-to-ARP grace period. In `HOME`, retain the
 existing relaxed behavior: CSI-only activity is a low-severity review, approved
 presence is safe, unknown connected activity is reviewed, and blocked devices
-remain critical. In `AWAY`, CSI alerts immediately even if an approved device is
-present; ARP and probe evidence continue through their ordinary correlation
-rules rather than cancelling or delaying CSI.
+remain critical. `AWAY` means the system is armed; CSI detection while Away
+must produce `ALERT/MEDIUM`, even without an ARP-identified device. CSI does not
+increase `current_intruder_count` because it detects motion rather than identity.
 
 #### CSI warm-up and health
 
@@ -430,7 +447,7 @@ Offline readiness means more than starting online and then disconnecting. The
 complete system must cold-boot and become operational with no Pi internet route.
 
 - [ ] Boot the Pi with no internet connection.
-- [ ] Establish USB SSH from the laptop.
+- [x] Establish USB SSH from the laptop.
 - [ ] Start or auto-start CSI capture, probing, FastAPI, and SQLite locally.
 - [ ] Confirm all Python packages, Nexmon utilities, configuration, and vendor
   data are already present.
@@ -485,7 +502,8 @@ does not claim visibility into protected classroom-network clients.
   Pi and laptop reboots.
 - [ ] Confirm VPN or Windows route settings do not take precedence over the
   private USB network.
-- [ ] Confirm USB SSH and FastAPI access before removing Ethernet.
+- [x] Confirm USB SSH access before removing Ethernet.
+- [ ] Confirm FastAPI access through the USB gadget address.
 - [ ] Keep the USB network from becoming the laptop's default internet route.
 
 #### Probe coverage
@@ -788,8 +806,8 @@ Tasks:
 |---|---:|---:|---:|---:|---|
 | HOME | No | No | No | Yes | REVIEW/LOW |
 | HOME | Yes | No | No | Yes | SAFE |
-| AWAY | No | No | No | Yes | ALERT/MEDIUM |
-| AWAY | Yes | No | No | Yes | ALERT/MEDIUM |
+| AWAY | No | No | No | Yes | REVIEW or SAFE — confirm |
+| AWAY | Yes | No | No | Yes | REVIEW or SAFE — confirm |
 | AWAY | No | Yes | No | No | ALERT |
 | AWAY | No | Yes | No | Yes | Higher-confidence ALERT |
 | Any | Any | Blocked | Any | Any | ALERT/CRITICAL |
@@ -821,7 +839,10 @@ Tasks:
 
 ### Classroom
 
-- [ ] Rediscover the classroom BSSID, channel, and bandwidth.
+- [x] Confirm real CSI capture and motion detection work in the classroom
+  deployment; validated successfully during the initial classroom test.
+- [x] Confirm the classroom BSSID, channel, and bandwidth for the tested AP
+  setup; rediscover only if the classroom AP/configuration changes.
 - [ ] Capture at least three empty/moving pairs.
 - [ ] Recalculate the normalized separation.
 - [ ] Override `SIGNALLY_CSI_BASELINE_FACTOR` through environment configuration.

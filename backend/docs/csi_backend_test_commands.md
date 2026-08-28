@@ -3,6 +3,65 @@
 This is the copy/paste command sheet for testing Signally on the Raspberry Pi.
 Run commands in the section whose heading names the correct machine.
 
+## Windows-Only Frontend and Auth Testing
+
+You can run the backend locally without the Pi when testing authentication,
+navigation, general frontend changes, and mock CSI behavior. Open PowerShell:
+
+```powershell
+cd D:\Signally\backend
+$env:SIGNALLY_CSI_REAL_PROVIDER_ENABLED="false"
+$env:SIGNALLY_AUTO_START_MONITORING="false"
+$env:SIGNALLY_AUTO_START_WIFI_PROBING="false"
+.\.venv\Scripts\python.exe -m uvicorn signally.api.app:app --host 0.0.0.0 --port 8000
+```
+
+Disabling the two background hardware loops prevents Windows from attempting Pi
+ARP/probe operations. The existing Windows `backend/signally.db` supplies the
+local auth and device data; it is separate from the Pi's database.
+
+Confirm the Windows backend in another PowerShell:
+
+```powershell
+curl.exe http://127.0.0.1:8000/system/state
+```
+
+For an Android Studio emulator, start Expo with Android's host-machine alias:
+
+```powershell
+cd D:\Signally\SignallyApp
+$env:EXPO_PUBLIC_API_URL="http://10.0.2.2:8000"
+npx expo start -c
+```
+
+For Expo Web instead, use:
+
+```powershell
+$env:EXPO_PUBLIC_API_URL="http://127.0.0.1:8000"
+npx expo start --web -c
+```
+
+Toggle mock CSI from another PowerShell to test frontend states:
+
+```powershell
+Invoke-RestMethod -Method Post `
+  -Uri http://127.0.0.1:8000/csi/set `
+  -ContentType application/json `
+  -Body '{"detected":true}'
+```
+
+Clear mock motion:
+
+```powershell
+Invoke-RestMethod -Method Post `
+  -Uri http://127.0.0.1:8000/csi/set `
+  -ContentType application/json `
+  -Body '{"detected":false}'
+```
+
+This workflow validates application behavior but not Nexmon capture, real CSI
+calibration, monitor-mode probing, USB networking, or laptop ARP submission.
+
 ## 1. Update the Raspberry Pi
 
 Run on the Pi:
