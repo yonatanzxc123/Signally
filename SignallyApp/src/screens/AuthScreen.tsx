@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, font, radius, spacing } from '../theme';
 import { ApiAuthResponse, ApiUserRole, api } from '../api/client';
+import BackendConnectionPanel from '../components/BackendConnectionPanel';
 
 interface Props {
   onAuth: (response: ApiAuthResponse) => Promise<void>;
@@ -236,6 +237,9 @@ export default function AuthScreen({ onAuth }: Props) {
 
             </Animated.View>
           </View>
+          <View style={styles.connectionPanel}>
+            <BackendConnectionPanel />
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -279,6 +283,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.lg,
+  },
+  connectionPanel: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
   },
   toggle: {
     flexDirection: 'row',

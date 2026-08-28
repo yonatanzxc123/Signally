@@ -1,9 +1,58 @@
 import { Platform } from 'react-native';
-const BASE_URL =
+import * as SecureStore from 'expo-secure-store';
+
+const API_URL_STORAGE_KEY = 'signally_api_url';
+const DEFAULT_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   (Platform.OS === 'web'
     ? 'http://127.0.0.1:8000'
     : 'http://10.12.194.1:8000');
+
+let baseUrl = DEFAULT_BASE_URL.replace(/\/+$/, '');
+const apiUrlReady = Platform.OS === 'web'
+  ? Promise.resolve()
+  : SecureStore.getItemAsync(API_URL_STORAGE_KEY).then((stored) => {
+      if (stored) baseUrl = stored;
+    });
+
+function normalizeApiUrl(value: string): string {
+  const normalized = value.trim().replace(/\/+$/, '');
+  if (!/^https?:\/\/[^\s]+$/i.test(normalized)) {
+    throw new Error('Enter a complete HTTP or HTTPS address.');
+  }
+  return normalized;
+}
+
+export async function getApiBaseUrl(): Promise<string> {
+  await apiUrlReady;
+  return baseUrl;
+}
+
+export async function setApiBaseUrl(value: string): Promise<string> {
+  const normalized = normalizeApiUrl(value);
+  baseUrl = normalized;
+  if (Platform.OS !== 'web') {
+    await SecureStore.setItemAsync(API_URL_STORAGE_KEY, normalized);
+  }
+  return normalized;
+}
+
+export async function testApiConnection(value: string): Promise<void> {
+  const url = normalizeApiUrl(value);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(`${url}/health`, { signal: controller.signal });
+    if (!response.ok) throw new Error(`Backend returned HTTP ${response.status}.`);
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Connection timed out.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -144,6 +193,7 @@ export interface ApiSecurityModeState {
 // ── Core fetch helper ──────────────────────────────────────────────────────
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  await apiUrlReady;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
   try {
@@ -151,7 +201,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       'Content-Type': 'application/json',
       ...(options?.headers ?? {}),
     };
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const res = await fetch(`${baseUrl}${path}`, {
       ...options,
       headers,
       signal: controller.signal,

@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors, font, radius, spacing } from '../theme';
 import { useAuth } from '../context/AuthContext';
+import BackendConnectionPanel from '../components/BackendConnectionPanel';
 
 export default function UserSettingsScreen() {
   const { user } = useAuth();
@@ -28,6 +29,9 @@ export default function UserSettingsScreen() {
         <Row icon="mail-outline" label="Email" value={user?.email ?? '—'} />
         <Divider />
         <Row icon="shield-checkmark-outline" label="Role" value={roleLabel} />
+      </View>
+      <View style={styles.connectionSection}>
+        <BackendConnectionPanel />
       </View>
     </SafeAreaView>
   );
@@ -63,6 +67,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     overflow: 'hidden',
+  },
+  connectionSection: {
+    marginHorizontal: spacing.lg,
+    padding: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
   },
   row: {
     flexDirection: 'row',
