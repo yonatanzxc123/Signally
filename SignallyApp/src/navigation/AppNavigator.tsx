@@ -4,11 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/HomeScreen';
 import DevicesStack from './DevicesStack';
 import LogsScreen from '../screens/LogsScreen';
+import TimelineScreen from '../screens/TimelineScreen';
 import { colors, font } from '../theme';
 
 type TabParamList = {
   Home: undefined;
   Devices: undefined;
+  Timeline: undefined;
   Logs: undefined;
 };
 
@@ -48,6 +50,15 @@ export default function AppNavigator() {
         options={{
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="phone-portrait-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Timeline"
+        component={TimelineScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="time-outline" size={size} color={color} />
           ),
         }}
       />

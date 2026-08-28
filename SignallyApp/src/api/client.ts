@@ -98,6 +98,10 @@ export interface ApiEvent {
   created_at: string;
 }
 
+export type ApiTimelineEvent = ApiEvent & {
+  event_type: 'FAMILY_MEMBER_ENTERED' | 'FAMILY_MEMBER_LEFT';
+};
+
 export interface ApiCsiState {
   provider_mode: 'real' | 'mock' | 'disabled' | 'legacy' | string;
   receiving_data: boolean;
@@ -232,11 +236,11 @@ export const api = {
   // Devices
   getDevices: () => request<ApiDevice[]>('/devices'),
   getPendingDevices: () => request<ApiDevice[]>('/devices/pending'),
-  approveDevice: (mac: string, ownerRole: 'FAMILY' | 'GUEST', role: ApiUserRole = 'ADMIN') =>
+  approveDevice: (mac: string, ownerRole: 'FAMILY' | 'GUEST', role: ApiUserRole = 'ADMIN', ownerName?: string) =>
     request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/approve`, {
       method: 'POST',
       headers: roleHeaders(role),
-      body: JSON.stringify({ owner_role: ownerRole }),
+      body: JSON.stringify({ owner_role: ownerRole, owner_name: ownerName }),
     }),
   approveAllPendingDevices: (ownerRole: 'FAMILY' | 'GUEST', role: ApiUserRole = 'ADMIN') =>
     request<ApiDevice[]>('/devices/approve-all', {
@@ -248,6 +252,12 @@ export const api = {
     request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/block`, {
       method: 'POST',
       headers: roleHeaders(role),
+    }),
+  setFamilyDeviceName: (mac: string, ownerName: string, role: ApiUserRole = 'ADMIN') =>
+    request<ApiDevice>(`/devices/${encodeURIComponent(mac)}/family-name`, {
+      method: 'PUT',
+      headers: roleHeaders(role),
+      body: JSON.stringify({ owner_name: ownerName }),
     }),
   deleteDevice: (mac: string) =>
     request<ApiMessage>(`/devices/${encodeURIComponent(mac)}`, { method: 'DELETE' }),
@@ -272,6 +282,7 @@ export const api = {
 
   // Events
   getEvents: (limit = 50) => request<ApiEvent[]>(`/events?limit=${limit}`),
+  getTimeline: (limit = 100) => request<ApiTimelineEvent[]>(`/timeline?limit=${limit}`),
 
   // System
   getSecurityMode: () => request<ApiSecurityModeState>('/security-mode'),

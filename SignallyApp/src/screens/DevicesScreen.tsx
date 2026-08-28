@@ -9,6 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DeviceItem from '../components/DeviceItem';
+import FamilyNameModal from '../components/FamilyNameModal';
 import { DeviceStatus } from '../types';
 import { colors, spacing, radius, font } from '../theme';
 import { useDevices } from '../context/DevicesContext';
@@ -29,6 +30,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 export default function DevicesScreen({ navigation }: Props) {
   const { devices, approveDevice, approveAllUnknownDevices, blockDevice, canManageDevices } = useDevices();
   const [filter, setFilter] = useState<Filter>('all');
+  const [familyDeviceId, setFamilyDeviceId] = useState<string | null>(null);
 
   const unknownCount = devices.filter((d) => d.status === 'unknown').length;
   const filtered = filter === 'all' ? devices : devices.filter((d) => d.status === filter);
@@ -105,7 +107,10 @@ export default function DevicesScreen({ navigation }: Props) {
             <DeviceItem
               key={device.id}
               device={device}
-              onApprove={approveDevice}
+              onApprove={(id, ownerRole) => {
+                if (ownerRole === 'FAMILY') setFamilyDeviceId(id);
+                else approveDevice(id, ownerRole);
+              }}
               onBlock={blockDevice}
               canManage={canManageDevices}
               onPress={(id) => navigation.navigate('DeviceDetail', { deviceId: id })}
@@ -113,6 +118,14 @@ export default function DevicesScreen({ navigation }: Props) {
           ))
         )}
       </ScrollView>
+      <FamilyNameModal
+        visible={familyDeviceId !== null}
+        onCancel={() => setFamilyDeviceId(null)}
+        onSave={(name) => {
+          if (familyDeviceId) approveDevice(familyDeviceId, 'FAMILY', name);
+          setFamilyDeviceId(null);
+        }}
+      />
     </SafeAreaView>
   );
 }
