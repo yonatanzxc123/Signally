@@ -52,8 +52,9 @@ WIFI_PROBING_INTERFACE = os.getenv("SIGNALLY_WIFI_PROBING_INTERFACE", "wlan1")
 WIFI_PROBING_MOCK_MODE = _env_bool("SIGNALLY_WIFI_PROBING_MOCK_MODE", False)
 WIFI_PROBING_FALLBACK_TO_MOCK = _env_bool("SIGNALLY_WIFI_PROBING_FALLBACK_TO_MOCK", True)
 
-# CSI. Real CSI is intentionally opt-in until nexmon hardware is capturing.
-CSI_REAL_PROVIDER_ENABLED = _env_bool("SIGNALLY_CSI_REAL_PROVIDER_ENABLED", False)
+# CSI. Raspberry Pi deployments use the real UDP receiver by default. Tests and
+# development environments can explicitly disable it with the environment flag.
+CSI_REAL_PROVIDER_ENABLED = _env_bool("SIGNALLY_CSI_REAL_PROVIDER_ENABLED", True)
 # Listen on every local interface because nexmon broadcasts frames on wlan0.
 CSI_UDP_IP = os.getenv("SIGNALLY_CSI_UDP_IP", "0.0.0.0")
 CSI_UDP_PORT = int(os.getenv("SIGNALLY_CSI_UDP_PORT", "5500"))
@@ -90,6 +91,12 @@ WIFI_PROBING_RECENT_EVENT_LIMIT = int(
 WIFI_PROBING_STRONG_RSSI_MIN = int(
     os.getenv("SIGNALLY_WIFI_PROBING_STRONG_RSSI_MIN", "-60")
 )
+
+WIFI_PROBING_IGNORED_MACS = {
+    mac.strip().upper()
+    for mac in os.getenv("SIGNALLY_WIFI_PROBING_IGNORED_MACS", "").split(",")
+    if mac.strip()
+}
 
 
 

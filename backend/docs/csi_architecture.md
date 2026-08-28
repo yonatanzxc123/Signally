@@ -92,7 +92,8 @@ flowchart TD
     C -->|no| M["return MOCK value<br/>(set via POST /csi/set)"]
 ```
 
-- Real provider only exists when `SIGNALLY_CSI_REAL_PROVIDER_ENABLED=true`.
+- The real provider is enabled by default. Set
+  `SIGNALLY_CSI_REAL_PROVIDER_ENABLED=false` only for mock/development runs.
 - `/csi/status` returning `presence_strength: null` = no real frames arriving,
   so it's serving the mock. This is the safe default, never a crash.
 - `POST /csi/set {"detected": true}` drives the **mock** — use it to test the

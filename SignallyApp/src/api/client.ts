@@ -1,9 +1,9 @@
 import { Platform } from 'react-native';
-// 10.0.2.2 = Android emulator host alias; real devices need the server's LAN IP.
 const BASE_URL =
-Platform.OS === 'web'
+  process.env.EXPO_PUBLIC_API_URL ??
+  (Platform.OS === 'web'
     ? 'http://127.0.0.1:8000'
-    : 'http://10.100.102.15:8000';
+    : 'http://10.12.194.1:8000');
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -126,6 +126,14 @@ export interface ApiMessage {
   message: string;
 }
 
+export interface ApiWifiProbingStatus {
+  running: boolean;
+  interface: string | null;
+  mock_mode: boolean;
+  started_at: string | null;
+  last_error: string | null;
+}
+
 export interface ApiSecurityModeState {
   mode: ApiSecurityMode;
   armed: boolean;
@@ -203,9 +211,13 @@ export const api = {
     }),
 
   // Wifi Probing
-  startWifiProbing: () => request<ApiMessage>('/wifi_probing/start', { method: 'POST' }),
+  startWifiProbing: () =>
+    request<ApiMessage>('/wifi_probing/start', {
+      method: 'POST',
+      body: JSON.stringify({ interface: 'wlan1', mock_mode: false }),
+    }),
   stopWifiProbing: () => request<ApiMessage>('/wifi_probing/stop', { method: 'POST' }),
-  getWifiProbingStatus: () => request<{ running: boolean; interface: string | null }>('/wifi_probing/status'),
+  getWifiProbingStatus: () => request<ApiWifiProbingStatus>('/wifi_probing/status'),
   getWifiProbingDevices: () => request<ApiDevice[]>('/wifi_probing/devices'),
 
   // Events
