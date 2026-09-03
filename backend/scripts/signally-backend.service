@@ -1,6 +1,6 @@
 [Unit]
 Description=Signally FastAPI backend
-After=signally-csi.service network-online.target
+After=signally-csi.service signally-wlan1-monitor.service network-online.target
 Wants=network-online.target
 
 [Service]

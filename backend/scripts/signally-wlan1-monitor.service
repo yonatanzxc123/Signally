@@ -1,0 +1,14 @@
+[Unit]
+Description=Set Signally wlan1 into monitor mode for Wi-Fi probing
+After=NetworkManager.service
+Wants=NetworkManager.service
+Before=signally-backend.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/default/signally-backend
+ExecStart=/bin/bash /home/idanyo/Signally/backend/scripts/wlan1_monitor.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
