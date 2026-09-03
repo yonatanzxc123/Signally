@@ -40,6 +40,7 @@ SignallyApp/ios/
 *.p12
 *.key
 *.mobileprovision
+*.local.md
 
 # IDEs
 .idea/

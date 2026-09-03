@@ -29,6 +29,41 @@ The Pi is never a member of the closed Wi-Fi network. The laptop is the only
 device on both networks at once, and relays one port so the phone can reach
 the Pi through it.
 
+## Confirmed working configuration (2026-09-03)
+
+This setup was carried out and verified end-to-end on 2026-09-03. The
+network is a dedicated SSID called **`Signally-Demo`** on the same physical
+TP-Link router used for prior classroom testing — but on a **different
+band/channel than any previous calibration**, so don't assume old values
+still apply. Real secret values (Wi-Fi password, ARP ingest token) live in
+`showcase_day_secrets.local.md` (gitignored, not in this file) — everything
+below is safe to have in git.
+
+- Confirmed: no WAN/internet uplink reachable from `Signally-Demo` — the
+  isolation is working correctly.
+- Router gateway / admin page: `192.168.0.1`. Its admin UI is a modern
+  client-side-encrypted single-page app — cannot be driven by simple HTTP
+  requests, has to be done by hand in a browser.
+- Laptop's Wi-Fi got a DHCP reservation, confirmed stable across
+  reconnects.
+- **CSI does not sense `Signally-Demo` itself.** It senses the router's
+  existing 5GHz band (`TP-Link_23D0_5G`, BSSID `BA:A6:E6:83:23:CF`,
+  channel 36, 80MHz) instead — `Signally-Demo` (2.4GHz/20MHz) would need a
+  full recalibration (different subcarrier count) rather than a channel
+  tweak, so it was kept purely as the client network. This is a deliberate
+  choice, not an oversight — don't "fix" it later without re-deriving why.
+- `/etc/default/signally-csi` previously pointed at
+  `a8:f7:d9:59:b7:a1` / channel 52 — that was the *old classroom AP*
+  (`MTA WiFi`, from `classroom_csi_calibration_2026-08-14.md`), a
+  completely different, no-longer-present device. `csi_check.sh` failed
+  with 0 packets until this was corrected to the values above. If CSI ever
+  shows 0 frames again, check this file first before assuming a channel
+  drift — it might be pointed at the wrong AP entirely, not just the wrong
+  channel on the right one.
+- Wi-Fi probing interface `wlan1` was confirmed to be the same physical
+  adapter as `setup.sh`'s hardcoded `wlx803f5d168019` — running in real
+  mode, no mock fallback, no mismatch.
+
 ## Pre-flight (do this today, while you still have internet)
 
 ### 1. Router (TP-Link)
@@ -39,9 +74,17 @@ the Pi through it.
   laptop (look for the Wi-Fi adapter's "Physical Address"). This is the one
   address that must stay fixed, since it's what goes in the phone's
   connection panel.
-- Note the current channel/band. If it changed from the last classroom
-  calibration (`classroom_csi_calibration_2026-08-14.md`: channel 52/80MHz,
-  `MTA WiFi` / `a8:f7:d9:59:b7:a1`), CSI needs a recheck (step 3 below).
+- Note the current channel/band of whichever network CSI is meant to
+  sense (see "Confirmed working configuration" above — it's not
+  necessarily the same SSID the phone/laptop join). If it changed, CSI
+  needs a recheck (step 5 below) — and check `/etc/default/signally-csi`
+  isn't pointed at an AP that's no longer present at all, not just a
+  drifted channel on the same one.
+- The router rebooted a few times during initial setup, specifically when
+  the laptop connected — stopped reproducing after the DHCP reservation
+  was added, root cause not fully confirmed. If it recurs: try a different
+  device first to isolate whether it's laptop-Wi-Fi-card-specific, and
+  check the router's physical power connection.
 
 ### 2. SSH into the Pi
 1. Plug the Pi into the laptop via USB-C (powers it and carries the private
@@ -103,19 +146,22 @@ sudo systemctl status signally-backend.service --no-pager
 sudo bash scripts/csi_check.sh 15 100
 curl -s http://127.0.0.1:8000/health
 curl -s http://127.0.0.1:8000/csi/status | python3 -m json.tool
-iw dev
+curl -s http://127.0.0.1:8000/wifi_probing/status | python3 -m json.tool
+sudo /usr/sbin/iw dev   # plain "iw dev" can fail with "command not found" over
+                         # a non-interactive SSH session (PATH is more minimal)
 ```
 - `csi_check.sh` must print `PASS`.
 - `/csi/status` should show `"provider_mode": "real"` and
-  `"receiving_data": true`.
-- `iw dev` should show the interface actually in monitor mode — confirm its
-  name matches `SIGNALLY_WIFI_PROBING_INTERFACE` (default `wlan1`) in
-  `/etc/default/signally-backend`. `setup.sh` hardcodes a specific USB
-  adapter name (`wlx803f5d168019`) that may not be the same name the system
-  assigns as `wlan1` — if they don't match, fix the env var, don't assume.
-  This matters because `SIGNALLY_WIFI_PROBING_FALLBACK_TO_MOCK` defaults to
-  `true`: a mismatched interface fails **silently** into fake-looking-real
-  mock probe data instead of an obvious error.
+  `"receiving_data": true`. If `frames_received` stays at 0, check
+  `/etc/default/signally-csi` isn't pointed at an AP that's no longer
+  present at all (see "Confirmed working configuration" above — this bit
+  us on 2026-09-03).
+- `/wifi_probing/status` should show `"running": true`, `"mock_mode": false`.
+  Confirmed as of 2026-09-03: `wlan1` is the same physical adapter as
+  `setup.sh`'s hardcoded `wlx803f5d168019` — no mismatch. Still worth this
+  quick check each session, since `SIGNALLY_WIFI_PROBING_FALLBACK_TO_MOCK`
+  defaults to `true` and a mismatch fails **silently** into fake-looking
+  mock data instead of an obvious error.
 
 If anything here looks wrong, stop and fix it now — this is the last point
 you'll have easy help available.
@@ -129,8 +175,9 @@ Run from an elevated PowerShell. It's idempotent — safe to re-run. It
 prints the laptop's current IPv4 addresses at the end; note the Wi-Fi one.
 
 ### 7. Join the closed Wi-Fi from the laptop and verify the chain
-1. Connect to the TP-Link SSID (the laptop stays on USB to the Pi *and*
-   Wi-Fi to the closed network simultaneously).
+1. Connect to `Signally-Demo` (the laptop stays on USB to the Pi *and*
+   Wi-Fi to the closed network simultaneously — confirmed to work fine
+   together).
 2. Confirm the laptop got its reserved IP (`ipconfig`).
 3. From the laptop, prove Wi-Fi → relay → USB → Pi works end to end:
    ```powershell
@@ -140,19 +187,21 @@ prints the laptop's current IPv4 addresses at the end; note the Wi-Fi one.
 
 ### 8. Start the laptop ARP agent
 Talks to the Pi directly over USB — not through the relay, which is only
-needed for the phone's direction:
+needed for the phone's direction. Real command with the actual token is in
+`showcase_day_secrets.local.md` (gitignored); shape is:
 ```powershell
 cd C:\Signally\Signally\backend
-$env:SIGNALLY_ARP_INGEST_TOKEN = "<same token as /etc/default/signally-backend>"
+$env:SIGNALLY_ARP_INGEST_TOKEN = "<real token — see showcase_day_secrets.local.md>"
 .\.venv\Scripts\python.exe scripts\laptop_arp_agent.py --interface "Wi-Fi" --target "<closed-network-subnet>/24" --backend "http://10.12.194.1:8000" --interval 10
 ```
 Leave this running in its own window for the whole session.
 
 ### 9. Connect the phone
-1. Join the same closed Wi-Fi SSID.
+1. Join `Signally-Demo`.
 2. Open the app → Auth screen (or User Settings if already logged in) →
    the backend connection panel.
-3. Enter `http://<laptop-wifi-ip>:8000`, save & test.
+3. Enter `http://<laptop-wifi-ip>:8000` (the laptop's reserved IP, not the
+   Pi's), save & test.
 4. Note: this override doesn't survive an app uninstall/reinstall
    (SecureStore is tied to the install) — don't uninstall before the demo.
 
@@ -177,7 +226,7 @@ path has trouble.
 3. `sudo systemctl status signally-csi.service signally-backend.service` —
    both `active` with zero manual commands.
 4. `sudo bash scripts/csi_check.sh 15 100` — `PASS`.
-5. Laptop: join the closed Wi-Fi, confirm the relay still works
+5. Laptop: join `Signally-Demo`, confirm the relay still works
    (`netsh interface portproxy show v4tov4`, then the `curl` check).
 6. Start the ARP agent (step 8).
 7. Phone: open the app, confirm it reconnects (URL is already saved).
@@ -190,10 +239,16 @@ error, then `sudo journalctl -u signally-backend.service -n 50 --no-pager`.
 Common cause: `/etc/default/signally-backend` missing a required value, or
 `../.venv/bin/pip install -r requirements.txt` not run after a `git pull`.
 
-**CSI channel drift**
-`csi_check.sh` fails or reports an unexpected chanspec → the router's
-channel/BSSID changed. Redo `csi_capture.sh` / `csi_configure.sh` against
-the current values and update `/etc/default/signally-csi`.
+**CSI channel drift (or wrong AP entirely)**
+`csi_check.sh` fails / reports an unexpected chanspec / `frames_received`
+stays 0 → don't assume it's just a channel drift. On 2026-09-03,
+`/etc/default/signally-csi` was found pointed at a completely different,
+no-longer-present AP (the old classroom router). Check the file's
+`SIGNALLY_CSI_SOURCE_MAC` against a fresh Wi-Fi scan before assuming the
+existing target AP just changed channel. Current confirmed values are in
+"Confirmed working configuration" above. Redo `csi_capture.sh` /
+`csi_configure.sh` against whatever the current values actually are and
+update `/etc/default/signally-csi`.
 
 **Portproxy rule missing after a laptop reboot**
 `netsh interface portproxy show v4tov4` — if empty, re-run
