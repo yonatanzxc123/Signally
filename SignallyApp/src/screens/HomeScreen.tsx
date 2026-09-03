@@ -116,6 +116,12 @@ export default function HomeScreen() {
     refetchInterval: 1_000,
     refetchIntervalInBackground: true,
     retry: false,
+    // Pause polling while a mode switch is in flight - otherwise this timer
+    // fires independently of the mutation and can land mid-flight, briefly
+    // overwriting the optimistic update with the pre-switch server state
+    // before onSuccess settles it (confirmed 2026-09-03: visible as a flash
+    // of the wrong mode/decision right after tapping Home/Away).
+    enabled: !securityModeMutation.isPending,
   });
 
   const hasUnknown = devices.some((d) => d.status === 'unknown');
