@@ -574,6 +574,66 @@ Required implementation:
 - [ ] Cache any manufacturer/vendor data required by the application.
 - [ ] Verify the Pi clock before correlating timestamped evidence.
 
+## Closed-Network Topology Decision — 2026-09-03
+
+The classroom Wi-Fi's client isolation was blocking ARP discovery of other
+devices during on-site testing. Decision: commit to the "isolated
+demonstration LAN" fallback described above as the primary approach rather
+than a contingency — the TP-Link runs as its own closed network (own DHCP,
+no WAN uplink) instead of bridging to the classroom LAN.
+
+Two changes from the topology described above:
+
+- **Frontend runs on a phone** joining the closed Wi-Fi, not on the laptop.
+  Every previously-tested run of the app was laptop-side over its own USB
+  link to the Pi; running it on an untethered phone is new, unvalidated
+  territory and should be treated as higher-risk than the rest of this
+  change.
+- Confirmed explicitly: **no Ethernet cable to the Pi.** `wlan0`/`wlan1`
+  stay dedicated to passive CSI/probe monitor-mode capture exactly as
+  designed; the Pi is never a member of the closed Wi-Fi network.
+
+Because the Pi has no presence on the closed Wi-Fi subnet, the phone has no
+IP path to it (the Pi is reachable only via the private USB link to the
+laptop, `10.12.194.1`). Resolution: a static Windows port-forward
+(`netsh interface portproxy`, see `backend/scripts/setup_laptop_relay.ps1`)
+on the laptop relays port 8000 from its Wi-Fi interface to the Pi's USB
+address. Chosen over Internet Connection Sharing because ICS renegotiates
+IP addressing on both adapters it touches, and the USB-to-Pi link is
+deliberately static on both ends (already documented as fragile in
+`classroom_csi_calibration_2026-08-14.md`). The phone's
+`BackendConnectionPanel` (already built, no changes needed) points at the
+laptop's Wi-Fi IP, not the Pi's address directly.
+
+IP stability: the Pi's `usb0` address is already static/self-assigned, not
+DHCP — no reservation needed. The laptop's Wi-Fi IP is the one address that
+must stay fixed (it's what the phone is configured to reach); resolved with
+a DHCP reservation for the laptop's Wi-Fi MAC on the TP-Link. This also
+resolved the earlier open question of whether to auto-start the backend via
+systemd (see `backend/scripts/signally-backend.service`, mirroring
+`signally-csi.service`'s pattern) — safe now that the relay address is
+fixed independent of backend restarts, and it removes a manual SSH step
+from every boot.
+
+`SIGNALLY_LOCAL_ARP_SCAN_ENABLED` stays `false`: the Pi still can't see the
+closed Wi-Fi subnet, so `laptop_arp_agent.py` pushing to `/arp/ingest`
+remains the only ARP path.
+
+Two risks worth flagging explicitly since they only bite once the laptop
+has no other connectivity to debug with: Wi-Fi probing fails **silently**
+into mock data if `SIGNALLY_WIFI_PROBING_INTERFACE` doesn't match the
+actual interface (`SIGNALLY_WIFI_PROBING_FALLBACK_TO_MOCK` defaults `true`)
+— `setup.sh`'s hardcoded USB adapter name and the `wlan1` default aren't
+cross-checked anywhere in code, so this needs manual verification (`iw
+dev`) before trusting probe data. And with no internet, the Pi has no path
+to NTP at all — the clock must be set from the laptop's correct time every
+session before starting the backend service (see the "Verify the Pi clock"
+item above, now made concrete: `backend/docs/closed_network_demo_runbook.md`).
+
+Full operational detail — router reservation, SSH access, exact boot
+commands, phone connection steps, and a troubleshooting tree — lives in
+`backend/docs/closed_network_demo_runbook.md`.
+
 ## Phase 1: Harden CSI Processing
 
 Primary files:

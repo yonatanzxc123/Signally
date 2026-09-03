@@ -1,0 +1,16 @@
+[Unit]
+Description=Signally FastAPI backend
+After=signally-csi.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/signally-backend
+Environment=SIGNALLY_PROJECT_ROOT=/home/idanyo/Signally
+WorkingDirectory=${SIGNALLY_PROJECT_ROOT}/backend
+ExecStart=${SIGNALLY_PROJECT_ROOT}/.venv/bin/python -m uvicorn signally.api.app:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
