@@ -60,9 +60,29 @@ below is safe to have in git.
   shows 0 frames again, check this file first before assuming a channel
   drift — it might be pointed at the wrong AP entirely, not just the wrong
   channel on the right one.
-- Wi-Fi probing interface `wlan1` was confirmed to be the same physical
-  adapter as `setup.sh`'s hardcoded `wlx803f5d168019` — running in real
-  mode, no mock fallback, no mismatch.
+- Wi-Fi probing interface `wlan1` is the same physical adapter as
+  `setup.sh`'s hardcoded `wlx803f5d168019` — confirmed, no naming mismatch.
+  But it was found stuck in `managed` mode on 2026-09-03 (NetworkManager
+  still had it), which let `/wifi_probing/status` report `"running": true"`
+  while genuinely capturing nothing — `tcpdump` even errored with
+  `"802.11 link-layer types supported only on 802.11"`. Fixed with a new
+  boot-time service, `signally-wlan1-monitor.service` (see step 3) — this
+  is no longer a manual step, but if probing ever looks dead again, check
+  `iw dev wlan1` shows `type monitor`, not `managed`, before anything else.
+- CSI arming can lose a race on a genuine cold boot: `nexutil` reports
+  success but the radio hasn't settled, so 0 frames flow — confirmed
+  2026-09-03, fixed by making `csi_capture.sh` verify frames are actually
+  arriving after arming and retry (up to 4 attempts) if not. Proven across
+  two real reboot tests. No manual action needed now, but if `frames_received`
+  ever stays 0 after boot despite correct channel/BSSID, this class of bug
+  is why — check `journalctl -u signally-csi.service -b` for how many
+  attempts it took.
+- CSI's baseline can also be contaminated if someone is standing near the
+  Pi during the ~30s warmup right after a backend restart — the "quiet"
+  reading it learns includes whatever's near it at that moment. If
+  `presence_detected` reads `true` while genuinely still, `sudo systemctl
+  restart signally-backend.service` and stay clear of the Pi for the warmup
+  window before trusting a reading again.
 
 ## Pre-flight (do this today, while you still have internet)
 
@@ -111,14 +131,19 @@ cd backend
 ../.venv/bin/pip install -r requirements.txt
 
 sudo cp scripts/signally-backend.service /etc/systemd/system/signally-backend.service
+sudo cp scripts/signally-wlan1-monitor.service /etc/systemd/system/signally-wlan1-monitor.service
 sudo cp scripts/signally-backend.env.example /etc/default/signally-backend
 sudo nano /etc/default/signally-backend
 # fill in real values: SIGNALLY_ARP_INGEST_TOKEN, SIGNALLY_WIFI_PROBING_IGNORED_MACS
 # Ctrl+O, Enter, Ctrl+X to save and exit
 
 sudo systemctl daemon-reload
-sudo systemctl enable signally-csi.service signally-backend.service
+sudo systemctl enable signally-csi.service signally-wlan1-monitor.service signally-backend.service
 ```
+`signally-wlan1-monitor.service` puts the probing adapter into monitor mode
+at boot (see "Confirmed working configuration" above for why this needs to
+be its own service). `signally-backend.service` already waits for it via
+`After=`.
 
 ### 4. Set the Pi's clock — do this every session
 The Pi has no path to NTP once offline, and without a battery-backed RTC its
@@ -139,9 +164,9 @@ repeat it every boot, before starting the backend service.
 ### 5. Restart services and verify on the Pi
 ```bash
 sudo systemctl restart signally-csi.service
+sudo systemctl restart signally-wlan1-monitor.service
 sudo systemctl restart signally-backend.service
-sudo systemctl status signally-csi.service --no-pager
-sudo systemctl status signally-backend.service --no-pager
+sudo systemctl status signally-csi.service signally-wlan1-monitor.service signally-backend.service --no-pager
 
 sudo bash scripts/csi_check.sh 15 100
 curl -s http://127.0.0.1:8000/health
@@ -157,11 +182,13 @@ sudo /usr/sbin/iw dev   # plain "iw dev" can fail with "command not found" over
   present at all (see "Confirmed working configuration" above — this bit
   us on 2026-09-03).
 - `/wifi_probing/status` should show `"running": true`, `"mock_mode": false`.
-  Confirmed as of 2026-09-03: `wlan1` is the same physical adapter as
-  `setup.sh`'s hardcoded `wlx803f5d168019` — no mismatch. Still worth this
-  quick check each session, since `SIGNALLY_WIFI_PROBING_FALLBACK_TO_MOCK`
-  defaults to `true` and a mismatch fails **silently** into fake-looking
-  mock data instead of an obvious error.
+  `signally-wlan1-monitor.service` handles putting `wlan1` into monitor mode
+  now, but confirm with `sudo /usr/sbin/iw dev wlan1 info | grep type` — it
+  must say `monitor`, not `managed`. `SIGNALLY_WIFI_PROBING_FALLBACK_TO_MOCK`
+  defaults to `true`, so a broken interface fails **silently** into
+  fake-looking mock data instead of an obvious error — this actually
+  happened on 2026-09-03, "running: true" the whole time while capturing
+  nothing.
 
 If anything here looks wrong, stop and fix it now — this is the last point
 you'll have easy help available.
@@ -223,8 +250,9 @@ path has trouble.
 
 1. Power the Pi, wait for boot.
 2. SSH in (step 2 above), set the clock (step 4).
-3. `sudo systemctl status signally-csi.service signally-backend.service` —
-   both `active` with zero manual commands.
+3. `sudo systemctl status signally-csi.service signally-wlan1-monitor.service
+   signally-backend.service` — all three `active` with zero manual commands
+   (proven across two real reboot tests on 2026-09-03).
 4. `sudo bash scripts/csi_check.sh 15 100` — `PASS`.
 5. Laptop: join `Signally-Demo`, confirm the relay still works
    (`netsh interface portproxy show v4tov4`, then the `curl` check).
@@ -272,11 +300,24 @@ show rule name="Signally API relay"` shows the rule too.
 - `curl -s http://127.0.0.1:8000/arp/status | python3 -m json.tool` on the
   Pi — `healthy: false` means no recent successful ingestion.
 
-**Probing silently in mock mode**
-`/system/state`'s probe fields look suspiciously clean/static → check
-`iw dev` on the Pi against `SIGNALLY_WIFI_PROBING_INTERFACE`. A mismatch
-degrades to mock data without any visible error (`SIGNALLY_WIFI_PROBING_FALLBACK_TO_MOCK`
-defaults to `true`).
+**Probing shows `running: true` but nothing is ever detected**
+Don't trust `"running": true` alone — check `sudo /usr/sbin/iw dev wlan1 info`
+shows `type monitor`. If it says `managed`, `signally-wlan1-monitor.service`
+either didn't run or lost a race with NetworkManager:
+`sudo systemctl status signally-wlan1-monitor.service`, then
+`sudo systemctl restart signally-wlan1-monitor.service` followed by
+`sudo systemctl restart signally-backend.service`. Also remember: devices
+already connected to `Signally-Demo` mostly stop sending probe requests —
+test with a device still searching for networks (or open the Wi-Fi picker
+screen to force a scan burst), not just already-associated ones.
+
+**CSI shows `frames_received: 0` right after a cold boot**
+Check `sudo journalctl -u signally-csi.service -b` — it should say
+`"CSI frames confirmed flowing on attempt N"`. If it exhausted all 4
+attempts with a warning instead, the radio needed longer than ~30s to
+settle this time; `sudo systemctl restart signally-csi.service` once the
+Pi's been up a bit longer, then `sudo systemctl restart
+signally-backend.service`.
 
 **Pi clock drift causing `/arp/ingest` rejections**
 Symptom: `/arp/status` shows submissions but they're not landing as

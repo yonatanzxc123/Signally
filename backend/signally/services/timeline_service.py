@@ -8,10 +8,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from signally.config import (
+    EVENT_DEVICE_DISCOVERED_NEW,
+    EVENT_DEVICE_SEEN_AGAIN,
     EVENT_FAMILY_MEMBER_ENTERED,
     EVENT_FAMILY_MEMBER_LEFT,
     PRESENCE_ARRIVAL_SCANS,
     PRESENCE_DEPARTURE_GRACE_SECONDS,
+    PRESENCE_WINDOW_SECONDS,
 )
 from signally.models.device import Device, DeviceStatus
 from signally.models.event import Event
@@ -46,7 +49,42 @@ class TimelineService:
         device.owner_name = cleaned
         self.session.commit()
         self.session.refresh(device)
+
+        # reconcile_scan() only tracks devices that are already named, so any
+        # ARP sightings before this moment are otherwise lost. Without this,
+        # naming someone while they're already home can mean no "arrived"
+        # event ever fires for that visit if they don't get seen again
+        # before disconnecting (confirmed 2026-09-03).
+        self._bootstrap_presence_if_recently_seen(device)
+
         return device
+
+    def _bootstrap_presence_if_recently_seen(self, device: Device) -> None:
+        recent = self.event_service.list_events_for_device_by_types(
+            device_mac=device.mac_address,
+            event_types=(EVENT_DEVICE_DISCOVERED_NEW, EVENT_DEVICE_SEEN_AGAIN),
+            limit=1,
+        )
+        if not recent:
+            return
+
+        last_seen = recent[0].created_at
+        if last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=timezone.utc)
+        if (utc_now() - last_seen).total_seconds() > PRESENCE_WINDOW_SECONDS:
+            return
+
+        state = self.session.get(PresenceState, device.mac_address)
+        if state is None:
+            state = PresenceState(device_mac=device.mac_address, is_present=False, consecutive_seen=0)
+            self.session.add(state)
+
+        if not state.is_present:
+            state.is_present = True
+            state.consecutive_seen = self.arrival_scans
+            state.last_observed_at = utc_now()
+            self._log_transition(EVENT_FAMILY_MEMBER_ENTERED, device)
+            self.session.commit()
 
     def reconcile_scan(self, observed_macs: set[str], observed_at: datetime | None = None) -> None:
         now = observed_at or utc_now()
@@ -87,7 +125,11 @@ class TimelineService:
                     state.consecutive_seen = 0
                     self._log_transition(EVENT_FAMILY_MEMBER_LEFT, device)
             elif not state.is_present:
-                state.consecutive_seen = 0
+                # Decay by one instead of resetting to zero: a single missed
+                # ARP scan (common for phones cycling Wi-Fi power-save)
+                # shouldn't erase all arrival progress and force starting
+                # over from scratch (confirmed fragile 2026-09-03).
+                state.consecutive_seen = max(0, state.consecutive_seen - 1)
 
         self.session.commit()
 

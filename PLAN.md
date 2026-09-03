@@ -634,6 +634,38 @@ Full operational detail — router reservation, SSH access, exact boot
 commands, phone connection steps, and a troubleshooting tree — lives in
 `backend/docs/closed_network_demo_runbook.md`.
 
+### Boot-reliability hardening, same day
+
+The plan above assumed `signally-csi.service` was sufficient for a
+zero-touch boot. Live testing on 2026-09-03 found it wasn't, on two counts,
+both now fixed and verified across two full cold-reboot tests (not just
+warm restarts):
+
+- **`wlan1` (Wi-Fi probing) had no boot-time monitor-mode service at all.**
+  It came up in `managed` mode after every boot, and
+  `WifiProbeDetector`/`AsyncSniffer` would report `"running": true"` with
+  no error while genuinely capturing zero frames — `SIGNALLY_WIFI_PROBING_FALLBACK_TO_MOCK`
+  masked this as healthy-looking mock-adjacent data. `signally-csi.service`
+  only ever handled `wlan0`. Added `signally-wlan1-monitor.service`
+  (`backend/scripts/wlan1_monitor.sh`), ordered before
+  `signally-backend.service`.
+- **CSI arming itself could lose a boot-timing race.** `nexutil` reported
+  success immediately after a cold boot, but the radio hadn't actually
+  settled and zero CSI frames flowed — the exact same commands worked
+  correctly when re-run a few minutes later, warm. `csi_capture.sh` now
+  verifies frames are actually arriving after arming (a real `tcpdump`
+  check, not trusting `nexutil`'s own exit code) and retries the full
+  arm sequence up to 4 times before giving up.
+
+Also found and fixed the same day, unrelated to boot ordering: CSI had been
+armed against a completely different, no-longer-present AP (the old
+`MTA WiFi` classroom router from `classroom_csi_calibration_2026-08-14.md`)
+— repointed to the router actually in use
+(`BA:A6:E6:83:23:CF`, channel 36/80MHz). And CSI's baseline warm-up can be
+contaminated by someone standing near the Pi during the ~30s calibration
+window right after a backend restart, producing constant false-positive
+motion — worth knowing, not something code can detect on its own.
+
 ## Phase 1: Harden CSI Processing
 
 Primary files:
