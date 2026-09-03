@@ -2,7 +2,7 @@
 Pydantic schemas for the Signally API.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 import ipaddress
 import re
 from typing import Optional
@@ -12,7 +12,26 @@ from pydantic import BaseModel, field_validator
 _MAC_PATTERN = re.compile(r"^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 
 
-class ConnectedInspectionResponse(BaseModel):
+class UTCBaseModel(BaseModel):
+    """Base for every schema in this file - treats naive datetimes as UTC.
+
+    Every timestamp in this system originates from utc_now(), but SQLite
+    silently drops tzinfo on round-trip through a plain (non-timezone)
+    DateTime column. Without this, naive datetimes serialize with no
+    offset/Z marker, and clients parse them as local time instead of UTC -
+    confirmed 2026-09-03: every displayed timestamp was off by exactly the
+    device's UTC offset, always looking hours older than it really was.
+    """
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _assume_utc(cls, value):
+        if isinstance(value, datetime) and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+
+class ConnectedInspectionResponse(UTCBaseModel):
     device_category: str
     confidence: float
     hostname: Optional[str] = None
@@ -23,7 +42,7 @@ class ConnectedInspectionResponse(BaseModel):
     signals: list[str]
 
 
-class DeviceResponse(BaseModel):
+class DeviceResponse(UTCBaseModel):
     mac_address: str
     ip_address: Optional[str] = None
     status: str
@@ -34,7 +53,7 @@ class DeviceResponse(BaseModel):
     owner_role: Optional[str] = None
 
 
-class EventResponse(BaseModel):
+class EventResponse(UTCBaseModel):
     id: int
     event_type: str
     device_mac: Optional[str]
@@ -42,15 +61,15 @@ class EventResponse(BaseModel):
     created_at: datetime
 
 
-class MessageResponse(BaseModel):
+class MessageResponse(UTCBaseModel):
     message: str
 
 
-class SetCsiPresenceRequest(BaseModel):
+class SetCsiPresenceRequest(UTCBaseModel):
     detected: bool
 
 
-class CsiPresenceResponse(BaseModel):
+class CsiPresenceResponse(UTCBaseModel):
     # Both legacy spellings are retained for existing /csi/status consumers.
     presence_detected: bool
     presence_strength: Optional[float] = None
@@ -72,7 +91,7 @@ class CsiPresenceResponse(BaseModel):
     last_error: Optional[str] = None
 
 
-class ArpObservationRequest(BaseModel):
+class ArpObservationRequest(UTCBaseModel):
     ip_address: str
     mac_address: str
 
@@ -90,7 +109,7 @@ class ArpObservationRequest(BaseModel):
         return normalized
 
 
-class ArpIngestionRequest(BaseModel):
+class ArpIngestionRequest(UTCBaseModel):
     scan_id: str
     captured_at: datetime
     scanner_id: str
@@ -105,13 +124,13 @@ class ArpIngestionRequest(BaseModel):
         return value
 
 
-class ArpIngestionResponse(BaseModel):
+class ArpIngestionResponse(UTCBaseModel):
     accepted: bool
     processed_devices_count: int
     received_at: datetime
 
 
-class ArpIngestionStatusResponse(BaseModel):
+class ArpIngestionStatusResponse(UTCBaseModel):
     healthy: bool
     last_scan_id: Optional[str] = None
     last_captured_at: Optional[datetime] = None
@@ -119,7 +138,7 @@ class ArpIngestionStatusResponse(BaseModel):
     last_device_count: int = 0
 
 
-class SystemStateResponse(BaseModel):
+class SystemStateResponse(UTCBaseModel):
     mode: str = "HOME"
     security_mode: str = "HOME"
     security_mode_updated_by_role: Optional[str] = None
@@ -146,7 +165,7 @@ class SystemStateResponse(BaseModel):
     notification_audience: list[str] = []
     recent_alerts: list[EventResponse] = []
 
-class MonitoringCycleResponse(BaseModel):
+class MonitoringCycleResponse(UTCBaseModel):
     mode: str = "HOME"
     security_mode: str = "HOME"
     csi_presence_detected: bool
@@ -174,24 +193,24 @@ class MonitoringCycleResponse(BaseModel):
     recent_alerts: list[EventResponse] = []
 
 
-class UserResponse(BaseModel):
+class UserResponse(UTCBaseModel):
     id: int
     display_name: str
     role: str
     created_at: datetime
 
 
-class UserCreateRequest(BaseModel):
+class UserCreateRequest(UTCBaseModel):
     display_name: str
     role: str
 
 
-class ApproveDeviceRequest(BaseModel):
+class ApproveDeviceRequest(UTCBaseModel):
     owner_role: str  # must be FAMILY or GUEST
     owner_name: Optional[str] = None
 
 
-class SetFamilyMemberNameRequest(BaseModel):
+class SetFamilyMemberNameRequest(UTCBaseModel):
     owner_name: str
 
     @field_validator("owner_name")
@@ -205,22 +224,22 @@ class SetFamilyMemberNameRequest(BaseModel):
         return cleaned
 
 
-class SetDeviceHostnameHintRequest(BaseModel):
+class SetDeviceHostnameHintRequest(UTCBaseModel):
     hostname: str
 
 
-class SecurityModeResponse(BaseModel):
+class SecurityModeResponse(UTCBaseModel):
     mode: str
     armed: bool
     updated_by_role: str
     updated_at: datetime
 
 
-class SetSecurityModeRequest(BaseModel):
+class SetSecurityModeRequest(UTCBaseModel):
     mode: str
 
 
-class SignupRequest(BaseModel):
+class SignupRequest(UTCBaseModel):
     display_name: str
     email: str
     password: str
@@ -228,12 +247,12 @@ class SignupRequest(BaseModel):
     role: str = "ADMIN"
 
 
-class LoginRequest(BaseModel):
+class LoginRequest(UTCBaseModel):
     email: str
     password: str
 
 
-class AuthResponse(BaseModel):
+class AuthResponse(UTCBaseModel):
     token: str
     user_id: int
     display_name: str
@@ -241,11 +260,11 @@ class AuthResponse(BaseModel):
     email: str
 
 
-class WifiProbingStartRequest(BaseModel):
+class WifiProbingStartRequest(UTCBaseModel):
     interface: Optional[str] = None
     mock_mode: bool = False
 
-class WifiProbingStatusResponse(BaseModel):
+class WifiProbingStatusResponse(UTCBaseModel):
     running: bool
     interface: Optional[str] = None
     mock_mode: bool
